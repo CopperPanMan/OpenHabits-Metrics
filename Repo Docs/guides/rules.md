@@ -4,6 +4,8 @@ Rules use the same metrics you log. Configure them in the Config Editor's **Bloc
 
 Loaded blocks start collapsed, showing the rule, hours, and assigned presets in each header. Open a header to edit the block, or use **Expand All / Collapse All**. Search matches block names, presets, and referenced metric names or IDs. New and duplicated blocks open automatically.
 
+Use **Create folder** beside **Add Block** to create a folder tile, give it a name, and select **Save name**. Drag a block onto a folder header to move it inside; closed folders accept blocks too. Click a folder header to open or close it. Drag a child back into the main list or its drop area to move it out. The **Move to folder** field is a keyboard alternative. Folder headers have reorder, Rename, and Remove folder controls; removing a folder returns its blocks to the main list. Folders have one level, persist with your copied configuration (including empty folders and tile positions), and support Undo/Redo. Search temporarily opens matching folders and restores their previous collapsed state when cleared.
+
 First install [iOS app protection](ios-lockouts.md) or [Chrome website protection](chrome.md).
 
 ## Choose a rule
@@ -26,7 +28,7 @@ A timestamp rule needs a valid timestamp for the tracking day. If none exists, t
 
 The beginning is inclusive and the end is exclusive. A window crossing midnight, such as `22:00`–`07:00`, works overnight. Equal beginning/end times mean a full day.
 
-Rearrange blocks with the header grab handles or up/down arrows. Rules are evaluated in their listed order. The first rule that actually blocks supplies the message and optional shortcut action. If you want an action when blocked, choose its Shortcut name/input in the rule; Chrome displays the block but cannot run an iOS shortcut.
+Each block header shows **Rule order**, the order used for evaluation. Moving a block into/out of a folder, renaming/removing a folder, or moving a folder tile organizes the view without changing rule priority. Reordering block cards relative to other block cards, or using their up/down arrows, changes that priority; the numbers update accordingly. The first rule that actually blocks supplies the message and optional shortcut action. If you want an action when blocked, choose its Shortcut name/input in the rule; Chrome displays the block but cannot run an iOS shortcut.
 
 Fixed timezones use the configured/script timezone; floating rules use the client's offset. See [Timezone settings](maintenance.md#timezone-settings) when you travel or mix clients.
 

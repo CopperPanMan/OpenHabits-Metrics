@@ -1,3 +1,11 @@
+## Folder tiles for metrics and blocks
+
+- Folders appear as cards in both lists, with Create folder, rename/removal, counts, and open/close controls.
+- Mouse/touch drag-and-drop moves cards into closed folders, out into the main list, or between cards; folder tiles can also be reordered among main-list cards.
+- Folder membership, empty folders, and tile positions survive copy/save/reimport and support Undo/Redo.
+- Search temporarily reveals matches inside folders, then restores their collapsed state; validation opens the affected folder and field.
+- Block headers show evaluation priority. Folder organization preserves rule order; explicitly reordering block cards changes priority.
+
 ## Desktop reliability and editor organization
 
 - Chrome allows website access when a configured lockouts server is unavailable or returns an error; actual rule blocks and local blocking without a server URL still apply.

@@ -285,92 +285,163 @@ def check_editor(page):
 
 
 def check_folders_and_qr(page):
-    page.set_viewport_size({'width': 1280, 'height': 900})
+    page.set_viewport_size({'width': 1280, 'height': 1000})
 
     def load(config):
         page.locator('.import-fallback').evaluate('(element) => element.open = true')
         page.locator('#importText').fill(json.dumps(config))
         page.locator('#parseBtn').click()
         expect(page.locator('#importStatus')).to_have_text('Config loaded successfully.')
+        page.locator('.import-fallback').evaluate('(element) => element.open = false')
 
     def metric(name):
         return page.locator(f'.metric-card:has(> summary h3:text-is("{name}"))')
 
+    def block(name):
+        return page.locator(f'.block-card:has(> summary h3:text-is("{name}"))')
+
+    def folder(tab, name):
+        return page.locator(f'#tab-{tab} .folder-tile:has(> summary h3:text-is("{name}"))')
+
+    def header(card):
+        return card.locator(':scope > summary')
+
+    def drag(source, target, after=False, cancel=False):
+        source.scroll_into_view_if_needed()
+        start = source.locator(':scope > summary .drag-handle').bounding_box()
+        end = target.bounding_box()
+        page.mouse.move(start['x'] + 10, start['y'] + 10)
+        page.mouse.down()
+        page.mouse.move(end['x'] + end['width'] / 2, end['y'] + (end['height'] - 2 if after else end['height'] / 2), steps=8)
+        if cancel:
+            page.keyboard.press('Escape')
+        page.mouse.up()
+
+    def rename(tab, previous, name):
+        header(folder(tab, previous)).get_by_role('button', name='Rename', exact=True).click()
+        folder(tab, previous).get_by_label('Folder name', exact=True).fill(name)
+        folder(tab, previous).get_by_role('button', name='Save name', exact=True).click()
+
     config = copy.deepcopy(CONFIG)
     config['metricFolders'] = ['Work', 'Health', 'Empty']
-    config['metricSettings'][0]['folder'] = 'Work'
-    config['metricSettings'][1]['folder'] = 'Health'
-    config['metricSettings'].append({'metricID': 'water', 'displayName': 'Water', 'dataType': 'number', 'folder': 'Health'})
+    config['metricSettings'].append({'metricID': 'water', 'displayName': 'Water', 'dataType': 'number'})
+    config['lockouts']['blockFolders'] = ['Daily', 'Limits']
     load(config)
     page.get_by_role('tab', name='Metrics', exact=True).click()
-    expect(page.locator('.metric-folder')).to_have_count(4)
-    # Dragging reorders siblings inside a folder and remains undoable.
-    metric('Focused Work').scroll_into_view_if_needed()
-    source = metric('Focused Work').locator('.drag-handle').bounding_box()
-    target = metric('Water').locator(':scope > summary').bounding_box()
-    page.mouse.move(source['x'] + 10, source['y'] + 10)
-    page.mouse.down()
-    page.mouse.move(target['x'] + 10, target['y'] + target['height'] - 2, steps=8)
-    page.mouse.up()
-    expect(page.locator('.metric-folder[data-folder-view="folder:Health"] .metric-card').first).to_contain_text('Water')
-    page.get_by_role('button', name='Undo', exact=True).click()
-    expect(page.locator('.metric-folder[data-folder-view="folder:Health"] .metric-card').first).to_contain_text('Focused Work')
-    page.get_by_label('Folder view', exact=True).select_option('folder:Work')
-    expect(metric('Day Plan')).to_be_visible()
-    expect(metric('Focused Work')).to_be_hidden()
-    page.get_by_label('Folder name', exact=True).fill('Office')
-    page.get_by_role('button', name='Rename folder', exact=True).click()
-    expect(page.get_by_label('Folder view', exact=True)).to_have_value('folder:Office')
-    expect(page.locator('.metric-folder:visible > summary')).to_have_text('Office (1)')
-    # Search escapes the selected folder and opens a collapsed matching group.
-    page.get_by_label('Folder view', exact=True).select_option('all')
-    health = page.locator('.metric-folder:has(> summary > span:text-is("Health (2)"))')
-    health.locator(':scope > summary').click()
-    page.get_by_label('Folder view', exact=True).select_option('folder:Office')
-    page.get_by_role('searchbox', name='Search metrics', exact=True).fill('water')
-    expect(page.get_by_label('Folder view', exact=True)).to_have_value('all')
-    expect(page.get_by_role('button', name='Rename folder', exact=True)).to_be_disabled()
+    expect(page.get_by_label('Folder view', exact=True)).to_have_count(0)
+    expect(page.locator('#tab-metrics .folder-tile')).to_have_count(3)
+    expect(folder('metrics', 'Health')).to_have_js_property('open', False)
+    drag(metric('Water'), header(folder('metrics', 'Health')), cancel=True)
     expect(metric('Water')).to_be_visible()
-    expect(health).to_have_js_property('open', True)
-    metric('Water').locator(':scope > summary').click()
-    metric('Water').get_by_label('Display Name', exact=True).fill('Drinking Water')
-    expect(page.locator('.metric-navigator a:visible')).to_contain_text('Drinking Water')
-    metric('Drinking Water').get_by_label('Move to folder', exact=True).select_option('Office')
-    expect(metric('Drinking Water').locator('xpath=..')).to_contain_text('Office (2)')
-    expect(metric('Drinking Water').get_by_label('Metric ID', exact=True)).to_have_value('water')
+    expect(page.locator('.drop-before, .drop-after, .drop-inside, .drag-source')).to_have_count(0)
+    # Dropping on the middle of a closed folder moves inside without opening it.
+    drag(metric('Water'), header(folder('metrics', 'Health')))
+    expect(folder('metrics', 'Health')).to_have_js_property('open', False)
+    expect(header(folder('metrics', 'Health'))).to_contain_text('1 metric')
+    expect(metric('Water')).to_be_hidden()
     page.get_by_role('button', name='Undo', exact=True).click()
-    expect(metric('Drinking Water').locator('xpath=..')).to_contain_text('Health (2)')
+    expect(metric('Water')).to_be_visible()
     page.get_by_role('button', name='Redo', exact=True).click()
-    # Export and import retain both membership and an empty folder.
+    header(folder('metrics', 'Health')).focus()
+    page.keyboard.press('Enter')
+    expect(metric('Water')).to_be_visible()
+    header(metric('Water')).click()
+    metric('Water').get_by_label('Display Name', exact=True).fill('Drinking Water')
+    # Keyboard assignment remains available alongside drag-and-drop.
+    metric('Drinking Water').get_by_label('Move to folder', exact=True).select_option('Work')
+    expect(folder('metrics', 'Work').locator('.metric-card')).to_contain_text('Drinking Water')
+    header(metric('Drinking Water')).click()
+    header(folder('metrics', 'Work')).click()
+    page.get_by_role('searchbox', name='Search metrics', exact=True).fill('water')
+    expect(metric('Drinking Water')).to_be_visible()
+    expect(folder('metrics', 'Work')).to_have_js_property('open', True)
+    page.get_by_role('searchbox', name='Search metrics', exact=True).fill('')
+    expect(folder('metrics', 'Work')).to_have_js_property('open', False)
+    # A folder can be reordered between main-list cards, without nesting.
+    drag(folder('metrics', 'Health'), header(metric('Focused Work')), after=True)
+    expect(page.locator('#tab-metrics .editor-list > [data-root-token]').last).to_contain_text('Health')
+    rename('metrics', 'Work', 'Office')
+    expect(folder('metrics', 'Office')).to_have_count(1)
+    # Drag a child out to the main-list drop area.
+    header(folder('metrics', 'Office')).click()
+    header(folder('metrics', 'Office')).click()
+    source = metric('Drinking Water').locator(':scope > summary .drag-handle')
+    source.scroll_into_view_if_needed()
+    start = source.bounding_box()
+    page.mouse.move(start['x'] + 10, start['y'] + 10)
+    page.mouse.down()
+    page.mouse.move(start['x'] + 20, start['y'] + 20)
+    outside = page.locator('#tab-metrics .root-dropzone')
+    outside.scroll_into_view_if_needed()
+    end = outside.bounding_box()
+    page.mouse.move(end['x'] + end['width']/2, end['y'] + end['height']/2)
+    page.mouse.up()
+    expect(metric('Drinking Water').locator('xpath=..')).to_have_class('editor-list')
+    page.get_by_role('button', name='Undo', exact=True).click()
+    expect(folder('metrics', 'Office').locator('.metric-card')).to_contain_text('Drinking Water')
+    header(folder('metrics', 'Office')).get_by_role('button', name='Remove folder', exact=True).click()
+    expect(metric('Drinking Water').locator('xpath=..')).to_have_class('editor-list')
+    page.get_by_role('button', name='Undo', exact=True).click()
+    page.locator('#tab-metrics').get_by_role('button', name='Create folder', exact=True).click()
+    expect(folder('metrics', 'New folder').get_by_label('Folder name', exact=True)).to_be_focused()
+    folder('metrics', 'New folder').get_by_label('Folder name', exact=True).fill('Personal')
+    folder('metrics', 'New folder').get_by_role('button', name='Save name', exact=True).click()
+    expect(header(folder('metrics', 'Personal'))).to_contain_text('0 metrics')
+
+    page.get_by_role('tab', name='Blocks', exact=True).click()
+    drag(block('Morning Routine'), header(folder('blocks', 'Daily')))
+    drag(block('Daily Limit'), header(folder('blocks', 'Limits')))
+    drag(folder('blocks', 'Limits'), header(folder('blocks', 'Daily')))
+    expect(page.locator('#tab-blocks .editor-list > .folder-tile').first).to_contain_text('Limits')
+    # Touch moves a block into another closed folder; grouping keeps priority.
+    header(folder('blocks', 'Limits')).click()
+    block('Daily Limit').scroll_into_view_if_needed()
+    start = block('Daily Limit').locator(':scope > summary .drag-handle').bounding_box()
+    end = header(folder('blocks', 'Daily')).bounding_box()
+    session = page.context.new_cdp_session(page)
+    session.send('Emulation.setTouchEmulationEnabled', {'enabled': True, 'maxTouchPoints': 5})
+    session.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': start['x'] + 10, 'y': start['y'] + 10}]})
+    session.send('Input.dispatchTouchEvent', {'type': 'touchMove', 'touchPoints': [{'x': end['x'] + end['width']/2, 'y': end['y'] + end['height']/2}]})
+    session.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+    session.detach()
+    expect(header(folder('blocks', 'Daily'))).to_contain_text('2 blocks')
+    expect(folder('blocks', 'Daily')).to_have_js_property('open', False)
+    header(folder('blocks', 'Daily')).click()
+    expect(header(block('Morning Routine'))).to_contain_text('Rule order 1')
+    expect(header(block('Daily Limit'))).to_contain_text('Rule order 2')
+    header(block('Daily Limit')).get_by_role('button', name='↑', exact=True).click()
+    expect(header(block('Daily Limit'))).to_contain_text('Rule order 1')
+    page.get_by_role('button', name='Undo', exact=True).click()
+    expect(header(block('Morning Routine'))).to_contain_text('Rule order 1')
+    page.locator('#tab-blocks').get_by_role('button', name='Create folder', exact=True).click()
+    folder('blocks', 'New folder').get_by_label('Folder name', exact=True).fill('Personal')
+    folder('blocks', 'New folder').get_by_role('button', name='Save name', exact=True).click()
+    # Both lists and empty folders retain membership and root positions on copy/reimport.
     page.locator('#exportBtn').click()
     exported = page.evaluate('JSON.parse(window.copiedConfig)')
-    assert exported['metricFolders'] == ['Office', 'Health', 'Empty']
+    assert exported['metricFolders'] == ['Office', 'Health', 'Empty', 'Personal']
+    assert exported['lockouts']['blockFolders'] == ['Daily', 'Limits', 'Personal']
+    assert [b['id'] for b in exported['lockouts']['blocks']] == ['morning', 'limit']
+    assert all(b['folder'] == 'Daily' for b in exported['lockouts']['blocks'])
     assert next(m for m in exported['metricSettings'] if m['metricID'] == 'water')['folder'] == 'Office'
+    assert exported['editorLayout']['metrics'].index('folder:Health') > exported['editorLayout']['metrics'].index('item:focus')
     load(exported)
-    expect(page.locator('.metric-folder')).to_have_count(4)
-    # Validation opens the right folder/card even from another folder view.
-    page.get_by_label('Folder view', exact=True).select_option('folder:Health')
-    metric('Focused Work').locator(':scope > summary').click()
-    metric('Focused Work').get_by_label('Display Name', exact=True).fill('')
-    page.get_by_label('Folder view', exact=True).select_option('folder:Office')
+    expect(page.locator('#tab-blocks .editor-list > .folder-tile').first).to_contain_text('Limits')
+    page.get_by_role('tab', name='Metrics', exact=True).click()
+    expect(folder('metrics', 'Office')).to_have_js_property('open', False)
+    # Validation opens closed parent folders and reaches the actual field.
+    invalid = copy.deepcopy(exported)
+    invalid['metricSettings'][2]['displayName'] = ''
+    invalid['lockouts']['blocks'][0]['typeSpecific']['task_block_IDs'] = ['missing']
+    load(invalid)
     page.locator('#exportBtn').click()
     expect(metric('Unnamed Metric').get_by_label('Display Name', exact=True)).to_be_focused()
-    expect(page.get_by_label('Folder view', exact=True)).to_have_value('all')
-    metric('Unnamed Metric').get_by_label('Display Name', exact=True).fill('Focused Work')
-    expect(page.get_by_role('button', name='Remove folder', exact=True)).to_be_disabled()
-    page.get_by_label('Folder view', exact=True).select_option('folder:Office')
-    page.get_by_role('button', name='Remove folder', exact=True).click()
-    expect(metric('Day Plan')).to_be_visible()
-    expect(metric('Drinking Water')).to_be_visible()
-    page.get_by_role('button', name='Undo', exact=True).click()
-    expect(page.get_by_label('Folder view', exact=True).locator('option[value="folder:Office"]')).to_have_count(1)
-    # New metrics inherit the selected folder, and creation is undoable.
-    page.get_by_label('Folder name', exact=True).fill('Personal')
-    page.get_by_role('button', name='Add folder', exact=True).click()
-    page.get_by_role('button', name='Add metric', exact=True).click()
-    expect(metric('Completion').get_by_label('Move to folder', exact=True)).to_have_value('Personal')
-    page.get_by_role('button', name='Undo', exact=True).click()
-    expect(metric('Completion')).to_have_count(0)
+    expect(folder('metrics', 'Office')).to_have_js_property('open', True)
+    page.locator('#validationErrors button').filter(has_text='"missing"').click()
+    expect(block('Morning Routine').get_by_label('Required Metric ID', exact=True)).to_be_focused()
+    expect(folder('blocks', 'Daily')).to_have_js_property('open', True)
+    load(exported)
+    page.get_by_role('tab', name='Metrics', exact=True).click()
 
     # Stub the unchanged QR drawing library; check form behavior and exact URL input.
     page.evaluate("window.qrcode = () => ({addData() {}, make() {}, getModuleCount: () => 21, isDark: () => true})")
@@ -417,7 +488,8 @@ def check_folders_and_qr(page):
     page.reload(wait_until='domcontentloaded')
     page.locator('.import-fallback').evaluate('(element) => element.open = true')
     page.locator('#restoreDraftBtn').click()
-    expect(page.get_by_label('Folder view', exact=True).locator('option[value="folder:Personal"]')).to_have_count(1)
+    expect(folder('metrics', 'Personal')).to_have_count(1)
+    expect(folder('blocks', 'Personal')).to_have_count(1)
 
 
 def main():

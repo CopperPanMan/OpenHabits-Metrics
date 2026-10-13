@@ -248,7 +248,9 @@ test('retired app-open reference creates no row and preserves existing history',
 test('folder metadata validates and reconciles without adding organization rows to the Sheet', () => {
   const c = load();
   const config = { trackingSheetName: 'Tracking Data', metricFolders: ['Health', 'Empty'],
-    metricSettings: [{ metricID: 'water', displayName: 'Water', dataType: 'number', folder: 'Health' }] };
+    metricSettings: [{ metricID: 'water', displayName: 'Water', dataType: 'number', folder: 'Health' }],
+    lockouts: { blockFolders: ['Daily'], blocks: [{ id: 'limit', type: 'duration_block', folder: 'Daily' }] },
+    editorLayout: { metrics: ['folder:Empty', 'folder:Health', 'item:water'], blocks: ['folder:Daily', 'item:limit'] } };
   assert.equal(c.openHabitsValidateConfig_(config).ok, true);
   assert.deepEqual(Array.from(c.openHabitsCollectRequiredRows_(config), row => row.id), ['water']);
   const plan = c.openHabitsPlanReconciliation_(config, [['water', 'Water', 2]]);

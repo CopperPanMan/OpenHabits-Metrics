@@ -220,11 +220,24 @@ button.chip-remove { border: 0; border-radius: 999px; padding: 0; width: 1.35rem
 .editor-card[open] > summary { margin-bottom: .8rem; }
 .editor-card > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 .editor-card[hidden], .metric-navigator a[hidden] { display: none; }
-.metric-folder[hidden], #qrMetricTextGroup[hidden] { display: none; }
-.metric-folder > summary { overflow-wrap: anywhere; }
-.folder-tools { display: flex; flex-wrap: wrap; align-items: end; gap: .6rem; margin: .8rem 0; }
-.folder-tools .config-field { flex: 1; min-width: min(220px, 100%); }
-.folder-tools > .field-hint, .folder-tools > .status { flex-basis: 100%; margin: 0; }
+.folder-tile[hidden], #qrMetricTextGroup[hidden] { display: none; }
+.folder-tile { border-left: 5px solid #a16207; scroll-margin-top: 5rem; }
+.folder-tile > summary { list-style: none; cursor: pointer; overflow-wrap: anywhere; }
+.folder-tile > summary::-webkit-details-marker { display: none; }
+.folder-tile > summary::before { content: '▸'; color: var(--accent); flex-shrink: 0; }
+.folder-tile[open] > summary::before { content: '▾'; }
+.folder-tile > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.folder-icon { font-size: 1.5rem; flex: 0 0 auto; }
+.folder-children { padding-left: 1rem; margin: .8rem 0 0 .5rem; border-left: 1px dashed var(--border); }
+.folder-rename { margin: .8rem 0; display: flex; flex-wrap: wrap; align-items: end; gap: .5rem; }
+.folder-rename .config-field { flex: 1; min-width: min(220px, 100%); }
+.folder-rename .status { flex-basis: 100%; margin: 0; }
+.editor-list { min-height: 40px; }
+.root-dropzone { display: none; min-height: 64px; border: 2px dashed var(--border); border-radius: 8px; padding: 1rem; color: var(--muted); }
+.editor-list.dragging .root-dropzone { display: block; }
+.drop-inside { outline: 3px solid var(--accent); outline-offset: -3px; background: var(--help-bg); }
+.folder-tile.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+.folder-tile.drop-after { box-shadow: 0 3px 0 var(--accent); }
 .metric-input-hint { margin: 0 .7rem .5rem; overflow-wrap: anywhere; }
 .card-heading { flex: 1; min-width: 0; }
 .card-heading h3 { margin: 0 0 .2rem; overflow-wrap: anywhere; }
@@ -279,8 +292,9 @@ button.chip-remove { border: 0; border-radius: 999px; padding: 0; width: 1.35rem
 }
 .qr-preview canvas { display: block; width: min(100%, 320px); height: auto; }
 @media (max-width: 720px) {
-  .editor-card > summary { flex-wrap: wrap; }
-  .editor-card > summary .controls { flex-basis: 100%; margin-left: 1.2rem; }
+  .editor-card > summary, .folder-tile > summary { flex-wrap: wrap; }
+  .editor-card > summary .controls, .folder-tile > summary .controls { flex-basis: 100%; margin-left: 1.2rem; }
+  .folder-children { padding-left: .5rem; margin-left: .2rem; }
   .inline-field-actions { align-items: flex-start; flex-direction: column; }
   .qr-layout { grid-template-columns: minmax(0, 1fr); }
   .qr-preview { min-height: 240px; }

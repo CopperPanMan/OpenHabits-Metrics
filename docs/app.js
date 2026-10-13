@@ -58,6 +58,7 @@
       lockouts: {
         globals: { barLength: 20, presetCalendarName: 'App Lockout Settings', defaultBlockTimezoneMode: 'fixed', cacheTimezoneMode: 'script' },
         presets: [],
+        blockFolders: [],
         blocks: []
       }
     };
@@ -68,7 +69,8 @@
   const itemUiKeys = new WeakMap();
   let itemUiSequence = 0;
   const searchQueries = { metrics: '', blocks: '' };
-  let selectedMetricFolder = 'all';
+  const renamingFolder = { metrics: null, blocks: null };
+  const searchFolderState = { metrics: null, blocks: null };
   let validationShown = false;
   const undoStack = [];
   const redoStack = [];
@@ -212,7 +214,7 @@
     if (key) {
       details.dataset.sectionKey = key;
       details.addEventListener('toggle', () => {
-        if (details.isConnected) sectionOpenState.set(key, details.open);
+        if (details.isConnected && !(details.dataset.folderTab && searchQueries[details.dataset.folderTab].trim())) sectionOpenState.set(key, details.open);
       });
     }
     const summary = document.createElement('summary');
@@ -237,7 +239,7 @@
 
   function captureSectionState() {
     document.querySelectorAll('details[data-section-key]').forEach(details => {
-      sectionOpenState.set(details.dataset.sectionKey, details.open);
+      if (!(details.dataset.folderTab && searchQueries[details.dataset.folderTab].trim())) sectionOpenState.set(details.dataset.sectionKey, details.open);
     });
   }
 
@@ -245,14 +247,15 @@
     sectionOpenState.clear();
     searchQueries.metrics = '';
     searchQueries.blocks = '';
-    selectedMetricFolder = 'all';
+    renamingFolder.metrics = renamingFolder.blocks = null;
+    searchFolderState.metrics = searchFolderState.blocks = null;
     validationShown = false;
     clearValidationErrors();
   }
 
   function openNewItem(item) {
     sectionOpenState.set(`${itemUiKey(item)}-card`, true);
-    if (item.folder) sectionOpenState.set(`metric-folder:${item.folder}`, true);
+    if (item.folder) sectionOpenState.set(folderSectionKey(item.metricID !== undefined ? 'metrics' : 'blocks', item.folder), true);
   }
 
   const BLOCK_TYPE_LABELS = {
@@ -278,6 +281,10 @@
     return [];
   }
 
+  function blockDisplaySummary(block) {
+    return `Rule order ${state.lockouts.blocks.indexOf(block) + 1} · ${blockCardSummary(block)}`;
+  }
+
   function blockSearchText(block) {
     const references = blockMetricReferences(block);
     const metricNames = state.metricSettings.filter(metric => references.includes(metric.metricID)).map(metric => metric.displayName);
@@ -288,27 +295,26 @@
     const root = $(`tab-${tab}`);
     if (!root) return;
     const query = searchQueries[tab].trim().toLowerCase();
-    const items = tab === 'metrics' ? state.metricSettings : state.lockouts.blocks;
+    const items = listItems(tab), folders = [...root.querySelectorAll('.folder-tile')];
+    if (query && !searchFolderState[tab]) searchFolderState[tab] = new Map(folders.map(folder => [folder.dataset.folderName, folder.open]));
     const itemsByKey = new Map(items.map(item => [itemUiKey(item), item]));
     root.querySelectorAll('.editor-card').forEach(card => {
       const item = itemsByKey.get(card.dataset.itemKey);
       if (!item) { card.hidden = true; return; }
-      const text = tab === 'metrics' ? `${item.displayName} ${item.metricID} ${item.dataType} ${metricCardSummary(item)}`.toLowerCase() : blockSearchText(item);
-      const inFolder = tab !== 'metrics' || query || selectedMetricFolder === 'all' || selectedMetricFolder === metricFolderView(item.folder);
-      card.hidden = !inFolder || !text.includes(query);
+      const text = tab === 'metrics' ? `${item.displayName} ${item.metricID} ${item.dataType} ${metricCardSummary(item)}` : blockSearchText(item);
+      card.hidden = !`${text} ${item.folder || ''}`.toLowerCase().includes(query);
     });
     const cardsByKey = new Map([...root.querySelectorAll('.editor-card')].map(card => [card.dataset.itemKey, card]));
-    root.querySelectorAll('.metric-navigator a').forEach(link => {
-      const card = cardsByKey.get(link.dataset.itemKey);
-      link.hidden = !card || card.hidden;
-    });
-    root.querySelectorAll('.metric-folder').forEach(folder => {
+    root.querySelectorAll('.metric-navigator a').forEach(link => { link.hidden = !cardsByKey.get(link.dataset.itemKey) || cardsByKey.get(link.dataset.itemKey).hidden; });
+    folders.forEach(folder => {
       const matches = [...folder.querySelectorAll('.editor-card')].some(card => !card.hidden);
-      folder.hidden = query ? !matches : selectedMetricFolder !== 'all' && selectedMetricFolder !== folder.dataset.folderView;
+      folder.hidden = Boolean(query) && !matches && !folder.dataset.folderName.toLowerCase().includes(query);
       if (query && matches) folder.open = true;
+      if (!query && searchFolderState[tab]?.has(folder.dataset.folderName)) folder.open = searchFolderState[tab].get(folder.dataset.folderName);
     });
+    if (!query) searchFolderState[tab] = null;
     const empty = root.querySelector('.search-empty');
-    if (empty) empty.hidden = !items.length || [...root.querySelectorAll('.editor-card')].some(card => !card.hidden);
+    if (empty) empty.hidden = !items.length || [...root.querySelectorAll('.editor-card')].some(card => !card.hidden) || folders.some(folder => !folder.hidden);
   }
 
   function listTools(tab) {
@@ -322,15 +328,13 @@
     search.setAttribute('aria-label', `Search ${tab}`);
     search.addEventListener('input', () => {
       searchQueries[tab] = search.value;
-      if (tab === 'metrics' && search.value.trim()) {
-        showAllMetricFolders();
-      }
       filterCards(tab);
     });
     const expand = open => {
-      $(`tab-${tab}`).querySelectorAll('.metric-folder, .editor-card, .editor-card details').forEach(details => {
+      $(`tab-${tab}`).querySelectorAll('.folder-tile, .editor-card, .editor-card details').forEach(details => {
         details.open = open;
         if (details.dataset.sectionKey) sectionOpenState.set(details.dataset.sectionKey, open);
+        if (details.dataset.folderTab && searchFolderState[tab]) searchFolderState[tab].set(details.dataset.folderName, open);
       });
     };
     tools.append(search, button('Expand All', 'secondary', () => expand(true), { trackHistory: false }), button('Collapse All', 'secondary', () => expand(false), { trackHistory: false }));
@@ -359,47 +363,61 @@
     return true;
   }
 
-  function dragHandle(card, item, tab, name) {
+  function dragHandle(card, item, tab, name, isFolder = false) {
     const handle = document.createElement('button');
-    handle.type = 'button';
-    handle.className = 'drag-handle secondary';
-    handle.textContent = '⠿';
-    handle.setAttribute('aria-label', `Drag to reorder ${name}`);
-    handle.title = 'Drag to reorder. You can also use the up and down buttons.';
+    handle.type = 'button'; handle.className = 'drag-handle secondary'; handle.textContent = '⠿';
+    handle.setAttribute('aria-label', `Drag to reorder ${isFolder ? 'folder ' : ''}${name}`);
+    handle.title = 'Drag to move or reorder. The up/down buttons and Move to folder field also work.';
     handle.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); });
     handle.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation(); });
     handle.addEventListener('pointerdown', event => {
       if (!event.isPrimary || event.button !== 0) return;
       if (cancelDrag) cancelDrag();
-      event.preventDefault();
-      event.stopPropagation();
-      handle.focus({ preventScroll: true });
-      const root = $(`tab-${tab}`);
-      const sourceKey = itemUiKey(item);
-      const currentName = (tab === 'metrics' ? item.displayName : item.name) || name;
+      event.preventDefault(); event.stopPropagation(); handle.focus({ preventScroll: true });
+      const root = $(`tab-${tab}`), list = card.closest('.editor-list');
+      const source = isFolder ? { folder: name } : { key: itemUiKey(item) };
+      const currentName = isFolder ? name : (tab === 'metrics' ? item.displayName : item.name) || name;
       const startY = event.clientY, startX = event.clientX;
       let x = startX, y = startY, dragging = false, drop = null, frame = null;
-      const cards = [...root.querySelectorAll('.editor-card')].filter(candidate =>
-        !candidate.hidden && candidate.getClientRects().length &&
-        (tab !== 'metrics' || candidate.closest('.metric-folder') === card.closest('.metric-folder')));
-      const clearMarks = () => cards.forEach(candidate => candidate.classList.remove('drop-before', 'drop-after'));
+      const clearMarks = () => root.querySelectorAll('.drop-before, .drop-after, .drop-inside').forEach(node => node.classList.remove('drop-before', 'drop-after', 'drop-inside'));
+      const contains = rect => rect.width && rect.height && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      const mark = (node, destination, className) => { drop = destination; node.classList.add(className); };
       const updateDrop = () => {
-        clearMarks();
-        drop = null;
-        const bounds = (card.closest('.metric-folder') || root).getBoundingClientRect();
-        if (x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom) return;
-        const ownHeader = card.firstElementChild.getBoundingClientRect();
-        if (y >= ownHeader.top && y <= ownHeader.bottom) return;
-        const others = cards.filter(candidate => candidate !== card);
-        const target = others.find(candidate => {
-          const rect = candidate.firstElementChild.getBoundingClientRect();
-          return y < rect.top + rect.height / 2;
-        }) || others[others.length - 1];
+        clearMarks(); drop = null;
+        if (!contains(list.getBoundingClientRect())) return;
+        if (contains(card.firstElementChild.getBoundingClientRect())) return;
+        const outside = list.querySelector('.root-dropzone');
+        if (!isFolder && contains(outside.getBoundingClientRect())) {
+          mark(outside, { kind: 'root' }, 'drop-inside'); return;
+        }
+        const targets = [...list.querySelectorAll('.editor-card, .folder-tile')].filter(node =>
+          node !== card && !node.hidden && node.firstElementChild.getBoundingClientRect().height);
+        for (const target of targets) {
+          const rect = target.firstElementChild.getBoundingClientRect();
+          if (!contains(rect)) continue;
+          const after = y >= rect.top + rect.height / 2;
+          if (target.classList.contains('folder-tile')) {
+            if (!isFolder && y > rect.top + rect.height * .2 && y < rect.bottom - rect.height * .2) {
+              mark(target, { kind: 'folder', name: target.dataset.folderName }, 'drop-inside');
+            } else mark(target, { kind: 'root', token: target.dataset.rootToken, after }, after ? 'drop-after' : 'drop-before');
+          } else if (!isFolder) {
+            mark(target, { kind: 'item', key: target.dataset.itemKey, after }, after ? 'drop-after' : 'drop-before');
+          } else if (target.dataset.rootToken) {
+            mark(target, { kind: 'root', token: target.dataset.rootToken, after }, after ? 'drop-after' : 'drop-before');
+          }
+          return;
+        }
+        if (!isFolder) {
+          const folder = targets.find(node => node.classList.contains('folder-tile') && contains(node.getBoundingClientRect()));
+          if (folder) { mark(folder, { kind: 'folder', name: folder.dataset.folderName }, 'drop-inside'); return; }
+        }
+        const roots = targets.filter(node => node.parentElement === list);
+        const target = roots.find(node => y < node.firstElementChild.getBoundingClientRect().top) || roots.at(-1);
         if (!target) return;
-        const rect = target.firstElementChild.getBoundingClientRect();
-        const after = y >= rect.top + rect.height / 2;
-        drop = { key: target.dataset.itemKey, after };
-        target.classList.add(after ? 'drop-after' : 'drop-before');
+        const rect = target.firstElementChild.getBoundingClientRect(), after = y >= rect.top + rect.height / 2;
+        if (!isFolder && target.classList.contains('editor-card')) {
+          mark(target, { kind: 'item', key: target.dataset.itemKey, after }, after ? 'drop-after' : 'drop-before');
+        } else mark(target, { kind: 'root', token: target.dataset.rootToken, after }, after ? 'drop-after' : 'drop-before');
       };
       const animate = () => {
         if (dragging) {
@@ -414,8 +432,7 @@
         if (next.pointerId !== event.pointerId) return;
         x = next.clientX; y = next.clientY;
         if (!dragging && Math.hypot(x - startX, y - startY) >= 6) {
-          dragging = true;
-          card.classList.add('drag-source');
+          dragging = true; card.classList.add('drag-source'); list.classList.add('dragging');
         }
         if (dragging) updateDrop();
       };
@@ -423,10 +440,8 @@
         if (next && next.pointerId !== event.pointerId) return;
         if (commit && next) { x = next.clientX; y = next.clientY; updateDrop(); }
         const destination = dragging && commit ? drop : null;
-        cancelDrag = null;
-        cancelAnimationFrame(frame);
-        clearMarks();
-        card.classList.remove('drag-source');
+        cancelDrag = null; cancelAnimationFrame(frame); clearMarks();
+        card.classList.remove('drag-source'); list.classList.remove('dragging');
         handle.removeEventListener('pointermove', movePointer);
         handle.removeEventListener('pointerup', up);
         handle.removeEventListener('pointercancel', cancelled);
@@ -435,20 +450,19 @@
         if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
         if (!destination) return;
         let changed = false;
-        withHistory(() => {
-          const items = tab === 'metrics' ? state.metricSettings : state.lockouts.blocks;
-          changed = reorderItems(items, sourceKey, destination.key, destination.after);
-          if (changed) renderAll();
-        });
-        if (changed) {
-          const moved = [...$(`tab-${tab}`).querySelectorAll('.editor-card')].find(candidate => candidate.dataset.itemKey === sourceKey);
-          moved.querySelector('.drag-handle').focus({ preventScroll: true });
-          const items = tab === 'metrics' ? state.metricSettings : state.lockouts.blocks;
-          $('reorderStatus').textContent = `${currentName} moved to position ${items.findIndex(value => itemUiKey(value) === sourceKey) + 1} of ${items.length}.`;
-        }
+        withHistory(() => { changed = dropEntry(tab, source, destination); if (changed) renderAll(); });
+        if (!changed) return;
+        let moved = isFolder
+          ? [...root.querySelectorAll('.folder-tile')].find(node => node.dataset.folderName === name)
+          : [...root.querySelectorAll('.editor-card')].find(node => node.dataset.itemKey === source.key);
+        const parent = moved.closest('.folder-tile');
+        if (!isFolder && parent && !parent.open) moved = parent;
+        moved.querySelector('.drag-handle').focus({ preventScroll: true });
+        $('reorderStatus').textContent = destination.kind === 'folder'
+          ? `${currentName} moved into ${destination.name}.`
+          : `${isFolder ? 'Folder ' : ''}${currentName} moved.`;
       };
-      const up = next => finish(true, next);
-      const cancelled = next => finish(false, next);
+      const up = next => finish(true, next), cancelled = next => finish(false, next);
       const escape = next => { if (next.key === 'Escape') { next.preventDefault(); finish(false); } };
       cancelDrag = () => finish(false);
       handle.addEventListener('pointermove', movePointer);
@@ -495,7 +509,7 @@
         if (!item) return;
         card.querySelector('[data-card-name]').textContent = (tab === 'metrics' ? item.displayName : item.name) || (tab === 'metrics' ? 'Unnamed Metric' : 'Unnamed Block');
         card.querySelector('.drag-handle').setAttribute('aria-label', `Drag to reorder ${card.querySelector('[data-card-name]').textContent}`);
-        card.querySelector('[data-card-description]').textContent = tab === 'metrics' ? metricCardSummary(item) : blockCardSummary(item);
+        card.querySelector('[data-card-description]').textContent = tab === 'metrics' ? metricCardSummary(item) : blockDisplaySummary(item);
       });
       if (tab === 'metrics') root.querySelectorAll('.metric-navigator a').forEach(link => {
         const metric = itemsByKey.get(link.dataset.itemKey);
@@ -555,6 +569,9 @@
     const before = cloneState(state);
     const beforeSerialized = JSON.stringify(before);
     changeFn();
+    for (const tab of ['metrics', 'blocks']) {
+      if ((state.editorLayout || {})[tab]) setRootOrder(tab, rootOrder(tab));
+    }
     if (JSON.stringify(state) !== beforeSerialized) {
       pushUndoSnapshot(before);
       saveLocalDraft();
@@ -642,6 +659,7 @@
   }
 
   function setMetricId(metric, id, supportingInputs = {}) {
+    replaceLayoutToken('metrics', itemToken('metrics', metric), `item:${id}`);
     metric.metricID = id;
     Object.keys(generatedSupportingIds).forEach(kind => {
       if (!generatedSupportingIds[kind].has(metric)) return;
@@ -774,116 +792,242 @@
     };
   }
 
-  function move(arr, i, dir) {
-    const j = i + dir;
-    if (j < 0 || j >= arr.length) return;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-    renderAll();
+  function listItems(tab, config = state) {
+    return tab === 'metrics' ? config.metricSettings : config.lockouts.blocks;
   }
 
-  function metricFolderView(name) {
-    return name ? `folder:${name}` : 'unfiled';
+  function listFolders(tab, config = state) {
+    return tab === 'metrics' ? config.metricFolders : config.lockouts.blockFolders;
   }
 
-  function showAllMetricFolders() {
-    if (selectedMetricFolder !== 'all') $('metricFolderName').value = '';
-    selectedMetricFolder = 'all';
-    $('metricFolderView').value = 'all';
-    $('renameMetricFolder').disabled = $('removeMetricFolder').disabled = true;
+  function normalizeFolderMetadata(tab, config) {
+    const folders = listFolders(tab, config);
+    if (!Array.isArray(folders) || folders.some(name => typeof name !== 'string')) throw new Error(`${tab === 'metrics' ? 'metricFolders' : 'blockFolders'} must be a list of folder names.`);
+    const normalized = [...new Set(folders.map(name => name.trim()).filter(Boolean))];
+    if (tab === 'metrics') config.metricFolders = normalized;
+    else config.lockouts.blockFolders = normalized;
+    listItems(tab, config).forEach(item => {
+      if (item.folder === undefined) return;
+      if (typeof item.folder !== 'string') throw new Error('An item folder must be a name.');
+      item.folder = item.folder.trim();
+      if (!item.folder) delete item.folder;
+      else if (!normalized.includes(item.folder)) normalized.push(item.folder);
+    });
   }
 
-  function folderNameForView() {
-    return selectedMetricFolder.startsWith('folder:') ? selectedMetricFolder.slice(7) : '';
+  function folderSectionKey(tab, name) {
+    return `folder:${tab}:${name}`;
   }
 
-  function checkFolderName(value, previous) {
+  function itemToken(tab, item) {
+    return `item:${tab === 'metrics' ? item.metricID : item.id}`;
+  }
+
+  function rootOrder(tab, config = state) {
+    const available = [...listFolders(tab, config).map(name => `folder:${name}`), ...listItems(tab, config).map(item => itemToken(tab, item))];
+    const saved = (config.editorLayout || {})[tab] || [];
+    return [...new Set([...saved.filter(token => available.includes(token)), ...available])];
+  }
+
+  function setRootOrder(tab, order) {
+    state.editorLayout = { ...(state.editorLayout || {}), [tab]: order };
+  }
+
+  function replaceLayoutToken(tab, previous, next) {
+    const saved = (state.editorLayout || {})[tab];
+    if (saved) setRootOrder(tab, saved.map(token => token === previous ? next : token));
+  }
+
+  function rootEntries(tab) {
+    const order = rootOrder(tab);
+    return [
+      ...listFolders(tab).map(name => ({ token: `folder:${name}`, folder: name })),
+      ...listItems(tab).filter(item => !item.folder).map(item => ({ token: itemToken(tab, item), item }))
+    ].sort((a, b) => order.indexOf(a.token) - order.indexOf(b.token));
+  }
+
+  function placeRoot(tab, token, target, after) {
+    const order = rootOrder(tab);
+    const from = order.indexOf(token), to = order.indexOf(target);
+    if (from < 0 || to < 0 || from === to) return false;
+    const destination = to + (after ? 1 : 0) - (from < to ? 1 : 0);
+    if (destination === from) return false;
+    order.splice(from, 1);
+    order.splice(destination, 0, token);
+    setRootOrder(tab, order);
+    return true;
+  }
+
+  function checkFolderName(tab, value, previous) {
     const name = String(value || '').trim();
     if (!name) throw new Error('Enter a folder name.');
-    if (state.metricFolders.some(folder => folder !== previous && folder.toLowerCase() === name.toLowerCase())) {
-      throw new Error('A folder with that name already exists.');
-    }
+    if (listFolders(tab).some(folder => folder !== previous && folder.toLowerCase() === name.toLowerCase())) throw new Error('A folder with that name already exists.');
     return name;
   }
 
-  function addMetricFolder(value) {
-    const name = checkFolderName(value);
-    state.metricFolders.push(name);
-    selectedMetricFolder = metricFolderView(name);
-    sectionOpenState.set(`metric-folder:${name}`, true);
+  function addFolder(tab, value) {
+    const name = checkFolderName(tab, value);
+    const order = rootOrder(tab);
+    listFolders(tab).push(name);
+    setRootOrder(tab, [...order, `folder:${name}`]);
+    sectionOpenState.set(folderSectionKey(tab, name), true);
     return name;
   }
 
-  function renameMetricFolder(previous, value) {
-    const index = state.metricFolders.indexOf(previous);
-    if (index < 0) throw new Error('Select a folder to rename.');
-    const name = checkFolderName(value, previous);
-    state.metricFolders[index] = name;
-    state.metricSettings.forEach(metric => { if (metric.folder === previous) metric.folder = name; });
-    sectionOpenState.set(`metric-folder:${name}`, sectionOpenState.get(`metric-folder:${previous}`) ?? true);
-    selectedMetricFolder = metricFolderView(name);
+  function renameFolder(tab, previous, value) {
+    const index = listFolders(tab).indexOf(previous);
+    if (index < 0) throw new Error('Choose an existing folder.');
+    const name = checkFolderName(tab, value, previous);
+    listFolders(tab)[index] = name;
+    listItems(tab).forEach(item => { if (item.folder === previous) item.folder = name; });
+    replaceLayoutToken(tab, `folder:${previous}`, `folder:${name}`);
+    sectionOpenState.set(folderSectionKey(tab, name), sectionOpenState.get(folderSectionKey(tab, previous)) ?? false);
+    renamingFolder[tab] = null;
   }
 
-  function removeMetricFolder(name) {
-    state.metricFolders = state.metricFolders.filter(folder => folder !== name);
-    state.metricSettings.forEach(metric => { if (metric.folder === name) delete metric.folder; });
-    selectedMetricFolder = 'unfiled';
+  function removeFolder(tab, name) {
+    const folders = listFolders(tab);
+    const index = folders.indexOf(name);
+    if (index < 0) return;
+    folders.splice(index, 1);
+    listItems(tab).forEach(item => { if (item.folder === name) delete item.folder; });
+    if ((state.editorLayout || {})[tab]) setRootOrder(tab, rootOrder(tab));
+    renamingFolder[tab] = null;
   }
 
-  function moveMetricToFolder(metric, name) {
-    if (name && !state.metricFolders.includes(name)) throw new Error('Choose an existing folder.');
-    if (name) metric.folder = name;
-    else delete metric.folder;
-    selectedMetricFolder = 'all';
-    sectionOpenState.set(`metric-folder:${name}`, true);
+  function moveToFolder(tab, item, name) {
+    if (name && !listFolders(tab).includes(name)) throw new Error('Choose an existing folder.');
+    if ((item.folder || '') === name) return false;
+    if (name) item.folder = name;
+    else delete item.folder;
+    return true;
   }
 
-  function moveMetric(metric, direction) {
-    const siblings = state.metricSettings.filter(item => (item.folder || '') === (metric.folder || ''));
-    const target = siblings[siblings.indexOf(metric) + direction];
+  function moveSibling(tab, item, direction) {
+    const items = listItems(tab);
+    const siblings = items.filter(value => (value.folder || '') === (item.folder || ''));
+    const target = siblings[siblings.indexOf(item) + direction];
     if (!target) return;
-    const from = state.metricSettings.indexOf(metric), to = state.metricSettings.indexOf(target);
-    [state.metricSettings[from], state.metricSettings[to]] = [target, metric];
+    const order = rootOrder(tab), a = order.indexOf(itemToken(tab, item)), b = order.indexOf(itemToken(tab, target));
+    [order[a], order[b]] = [order[b], order[a]];
+    if ((state.editorLayout || {})[tab]) setRootOrder(tab, order);
+    const from = items.indexOf(item), to = items.indexOf(target);
+    [items[from], items[to]] = [target, item];
     renderAll();
   }
 
-  function renderFolderTools() {
-    if (folderNameForView() && !state.metricFolders.includes(folderNameForView())) selectedMetricFolder = 'all';
-    const tools = document.createElement('div');
-    tools.className = 'folder-tools';
-    const view = makeSelect([
-      { value: 'all', label: 'All metrics' }, { value: 'unfiled', label: 'Unfiled' },
-      ...state.metricFolders.map(name => ({ value: metricFolderView(name), label: name }))
-    ], selectedMetricFolder, value => {
-      selectedMetricFolder = value;
-      searchQueries.metrics = '';
-      if (folderNameForView()) sectionOpenState.set(`metric-folder:${folderNameForView()}`, true);
-      renderMetrics();
+  function dropEntry(tab, source, destination) {
+    if (source.folder) {
+      if (destination.kind !== 'root') return false;
+      return placeRoot(tab, `folder:${source.folder}`, destination.token, destination.after);
+    }
+    const items = listItems(tab);
+    const item = items.find(value => itemUiKey(value) === source.key);
+    if (!item) return false;
+    if (destination.kind === 'folder') return moveToFolder(tab, item, destination.name);
+    if (destination.kind === 'item') {
+      const target = items.find(value => itemUiKey(value) === destination.key);
+      if (!target || target === item) return false;
+      const assigned = moveToFolder(tab, item, target.folder || '');
+      const placed = !target.folder && placeRoot(tab, itemToken(tab, item), itemToken(tab, target), destination.after);
+      return reorderItems(items, source.key, destination.key, destination.after) || assigned || placed;
+    }
+    if (destination.kind === 'root') {
+      const assigned = moveToFolder(tab, item, '');
+      const target = destination.token || rootEntries(tab).filter(entry => entry.item !== item).at(-1)?.token;
+      const placed = target && placeRoot(tab, itemToken(tab, item), target, destination.after ?? true);
+      return assigned || Boolean(placed);
+    }
+    return false;
+  }
+
+  function createFolderButton(tab) {
+    return button('Create folder', 'secondary', () => {
+      let name = 'New folder', suffix = 2;
+      while (listFolders(tab).some(value => value.toLowerCase() === name.toLowerCase())) name = `New folder ${suffix++}`;
+      addFolder(tab, name);
+      searchQueries[tab] = '';
+      renamingFolder[tab] = name;
+      renderAll();
+      const folder = [...$(`tab-${tab}`).querySelectorAll('.folder-tile')].find(tile => tile.dataset.folderName === name);
+      const input = folder.querySelector('.folder-rename input');
+      input.focus(); input.select();
     });
-    view.id = 'metricFolderView';
-    field(tools, 'Folder view', view, 'Search finds metrics across all folders.');
-    const name = document.createElement('input');
-    name.type = 'text';
-    name.id = 'metricFolderName';
-    name.value = folderNameForView();
-    name.placeholder = 'New folder name';
-    field(tools, 'Folder name', name, 'Create a folder, or select a folder above to rename it.');
-    const status = document.createElement('p');
-    status.className = 'status';
-    status.setAttribute('role', 'status');
-    const apply = operation => {
-      try { operation(); searchQueries.metrics = ''; renderAll(); }
-      catch (error) { status.textContent = error.message; }
-    };
-    const actions = document.createElement('div');
-    actions.className = 'row gap';
-    const rename = button('Rename folder', 'secondary', () => apply(() => renameMetricFolder(folderNameForView(), name.value)));
-    const remove = button('Remove folder', 'secondary', () => apply(() => removeMetricFolder(folderNameForView())));
-    rename.id = 'renameMetricFolder';
-    remove.id = 'removeMetricFolder';
-    rename.disabled = remove.disabled = !folderNameForView();
-    actions.append(button('Add folder', 'secondary', () => apply(() => addMetricFolder(name.value))), rename, remove);
-    tools.append(actions, fieldHint('Removing a folder moves its metrics to Unfiled. Use Undo to restore it.'), status);
-    return tools;
+  }
+
+  function moveFolderTile(tab, name, direction) {
+    const entries = rootEntries(tab), index = entries.findIndex(entry => entry.folder === name);
+    const target = entries[index + direction];
+    if (target && placeRoot(tab, `folder:${name}`, target.token, direction > 0)) renderAll();
+  }
+
+  function renderFolderTile(tab, name, renderer) {
+    const tile = toggleSection('', folderSectionKey(tab, name), false);
+    tile.className = `card folder-tile ${tab === 'metrics' ? 'metric-folder' : 'block-folder'}`;
+    tile.dataset.folderName = name;
+    tile.dataset.folderTab = tab;
+    tile.dataset.rootToken = `folder:${name}`;
+    const header = tile.firstElementChild;
+    header.className = 'card-head';
+    const icon = document.createElement('span'); icon.className = 'folder-icon'; icon.textContent = '📁'; icon.setAttribute('aria-hidden', 'true');
+    const heading = document.createElement('div'); heading.className = 'card-heading';
+    const title = document.createElement('h3'); title.textContent = name;
+    const count = listItems(tab).filter(item => item.folder === name).length;
+    const description = document.createElement('span'); description.className = 'card-description'; description.textContent = `${count} ${tab === 'metrics' ? 'metric' : 'block'}${count === 1 ? '' : 's'}`;
+    heading.append(title, description);
+    const controls = document.createElement('div'); controls.className = 'controls';
+    controls.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); });
+    controls.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation(); });
+    controls.append(button('↑', 'secondary', () => moveFolderTile(tab, name, -1)), button('↓', 'secondary', () => moveFolderTile(tab, name, 1)));
+    controls.append(button('Rename', 'secondary', () => {
+      renamingFolder[tab] = name;
+      sectionOpenState.set(folderSectionKey(tab, name), true);
+      renderAll();
+      const input = [...$(`tab-${tab}`).querySelectorAll('.folder-tile')].find(folder => folder.dataset.folderName === name).querySelector('.folder-rename input');
+      input.focus(); input.select();
+    }, { trackHistory: false }));
+    controls.append(button('Remove folder', 'secondary', () => { removeFolder(tab, name); renderAll(); }));
+    header.replaceChildren(dragHandle(tile, null, tab, name, true), icon, heading, controls);
+    if (renamingFolder[tab] === name) {
+      const edit = document.createElement('div'); edit.className = 'folder-rename';
+      const input = document.createElement('input'); input.type = 'text'; input.value = name;
+      field(edit, 'Folder name', input, 'Rename this folder without changing its contents.');
+      const status = document.createElement('p'); status.className = 'status'; status.setAttribute('role', 'status');
+      const save = button('Save name', 'secondary', () => {
+        try { renameFolder(tab, name, input.value); renderAll(); }
+        catch (error) { status.textContent = error.message; }
+      });
+      const cancel = () => { renamingFolder[tab] = null; renderAll(); };
+      input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); save.click(); } if (event.key === 'Escape') { event.preventDefault(); cancel(); } });
+      edit.append(save, button('Cancel rename', 'secondary', cancel, { trackHistory: false }), status);
+      tile.appendChild(edit);
+    }
+    const children = document.createElement('div'); children.className = 'folder-children';
+    listItems(tab).forEach((item, index) => { if (item.folder === name) children.appendChild(renderer(item, index)); });
+    if (!count) children.appendChild(fieldHint(`Drag ${tab} onto this folder to move them inside.`));
+    tile.appendChild(children);
+    return tile;
+  }
+
+  function renderItemList(tab, renderer) {
+    const list = document.createElement('div'); list.className = 'editor-list';
+    rootEntries(tab).forEach(entry => {
+      if (entry.folder) list.appendChild(renderFolderTile(tab, entry.folder, renderer));
+      else {
+        const card = renderer(entry.item, listItems(tab).indexOf(entry.item));
+        card.dataset.rootToken = entry.token;
+        list.appendChild(card);
+      }
+    });
+    const outside = document.createElement('div'); outside.className = 'root-dropzone'; outside.textContent = `Move ${tab === 'metrics' ? 'metric' : 'block'} into the main list`;
+    list.appendChild(outside);
+    return list;
+  }
+
+  function folderAssignmentField(container, tab, item) {
+    field(container, 'Move to folder', makeSelect([
+      { value: '', label: 'Main list (outside folders)' }, ...listFolders(tab).map(name => ({ value: name, label: name }))
+    ], item.folder || '', name => { moveToFolder(tab, item, name); if (name) sectionOpenState.set(folderSectionKey(tab, name), true); renderAll(); }), 'You can also drag this card into a folder or back into the main list.');
   }
 
   function uniqueId(base, existingIds) {
@@ -919,6 +1063,7 @@
     if (metric.streaks.streaksID) generateSupportingId(copy, 'streaks');
     if (pointsEnabled(metric)) generateSupportingId(copy, 'points');
     state.metricSettings.splice(index + 1, 0, copy);
+    if ((state.editorLayout || {}).metrics) placeRoot('metrics', itemToken('metrics', copy), itemToken('metrics', metric), true);
     generatedMetricIds.add(copy);
     openNewItem(copy);
     searchQueries.metrics = '';
@@ -930,6 +1075,7 @@
     copy.name = `${block.name || block.id || 'Block'} Copy`;
     copy.id = uniqueId(`${block.id || normalizedMetricId(copy.name)}_copy`, new Set(state.lockouts.blocks.map(item => item.id)));
     state.lockouts.blocks.splice(index + 1, 0, copy);
+    if ((state.editorLayout || {}).blocks) placeRoot('blocks', itemToken('blocks', copy), itemToken('blocks', block), true);
     openNewItem(copy);
     searchQueries.blocks = '';
     renderAll();
@@ -1043,8 +1189,8 @@
     card.id = `metric-card-${i}`;
     const ctr = document.createElement('div');
     ctr.className = 'controls';
-    ctr.append(button('↑', 'secondary', () => moveMetric(metric, -1)));
-    ctr.append(button('↓', 'secondary', () => moveMetric(metric, 1)));
+    ctr.append(button('↑', 'secondary', () => moveSibling('metrics', metric, -1)));
+    ctr.append(button('↓', 'secondary', () => moveSibling('metrics', metric, 1)));
     ctr.append(button('Duplicate', 'secondary', () => duplicateMetric(metric, i)));
     ctr.append(button('Delete', 'danger', () => { state.metricSettings.splice(i, 1); renderAll(); }));
     cardHeader(card, metric, 'metrics', metric.displayName || 'Unnamed Metric', metricCardSummary(metric), ctr);
@@ -1061,17 +1207,14 @@
     idActions.className = 'inline-field-actions';
     idActions.append(fieldHint('Used by Shortcuts and integrations. Usually you can leave the generated value as-is.'));
     idActions.append(button('Regenerate from name', 'link-button', () => {
-      metric.metricID = normalizedMetricId(metric.displayName);
-      setMetricId(metric, metric.metricID, supportingInputs);
+      setMetricId(metric, normalizedMetricId(metric.displayName), supportingInputs);
       generatedMetricIds.add(metric);
       renderAll();
     }));
     metricIdField.appendChild(idActions);
     g.appendChild(metricIdField);
 
-    field(g, 'Move to folder', makeSelect([
-      { value: '', label: 'Unfiled' }, ...state.metricFolders.map(name => ({ value: name, label: name }))
-    ], metric.folder || '', name => { moveMetricToFolder(metric, name); renderAll(); }), 'Organize this metric without changing its ID or Sheet history.');
+    folderAssignmentField(g, 'metrics', metric);
 
     const typeGroup = document.createElement('div');
     typeGroup.className = 'field-group';
@@ -1205,7 +1348,6 @@
     root.innerHTML = '';
     root.appendChild(renderMetricSettings());
     root.appendChild(listTools('metrics'));
-    root.appendChild(renderFolderTools());
     const nav = document.createElement('nav'); nav.className = 'metric-navigator'; nav.setAttribute('aria-label', 'Metric navigator');
     state.metricSettings.forEach((metric, index) => {
       const link = document.createElement('a');
@@ -1216,17 +1358,7 @@
       nav.appendChild(link);
     });
     root.appendChild(nav);
-    if (state.metricFolders.length) {
-      ['', ...state.metricFolders].forEach(name => {
-        const members = state.metricSettings.filter(metric => (metric.folder || '') === name);
-        const group = toggleSection(`${name || 'Unfiled'} (${members.length})`, `metric-folder:${name}`, true);
-        group.classList.add('metric-folder');
-        group.dataset.folderView = metricFolderView(name);
-        members.forEach(metric => group.appendChild(renderMetric(metric, state.metricSettings.indexOf(metric))));
-        if (!members.length) group.appendChild(fieldHint('No metrics in this folder. Move a metric here or add one below.'));
-        root.appendChild(group);
-      });
-    } else state.metricSettings.forEach((m, i) => root.appendChild(renderMetric(m, i)));
+    root.appendChild(renderItemList('metrics', renderMetric));
     root.appendChild(searchEmptyMessage('metrics'));
     filterCards('metrics');
     const recipe = makeSelect([
@@ -1250,12 +1382,12 @@
     addRow.className = 'row gap';
     addRow.append(recipe, button('Add metric', '', () => {
       const metric = metricFromRecipe(recipe.value);
-      if (folderNameForView()) metric.folder = folderNameForView();
       state.metricSettings.push(metric);
       openNewItem(metric);
       searchQueries.metrics = '';
       renderAll();
     }));
+    addRow.appendChild(createFolderButton('metrics'));
     addMetric.append(addTitle, addDescription, addRow);
     root.append(addMetric);
     publishConfiguredMetrics();
@@ -1274,21 +1406,24 @@
     card.id = `block-card-${i}`;
     const ctr = document.createElement('div');
     ctr.className = 'controls';
-    ctr.append(button('↑', 'secondary', () => move(state.lockouts.blocks, i, -1)));
-    ctr.append(button('↓', 'secondary', () => move(state.lockouts.blocks, i, 1)));
+    ctr.append(button('↑', 'secondary', () => moveSibling('blocks', block, -1)));
+    ctr.append(button('↓', 'secondary', () => moveSibling('blocks', block, 1)));
     ctr.append(button('Duplicate', 'secondary', () => duplicateBlock(block, i)));
     ctr.append(button('Delete', 'danger', () => { state.lockouts.blocks.splice(i, 1); renderAll(); }));
-    cardHeader(card, block, 'blocks', block.name || 'Unnamed Block', blockCardSummary(block), ctr);
+    cardHeader(card, block, 'blocks', block.name || 'Unnamed Block', blockDisplaySummary(block), ctr);
 
     const g = document.createElement('div');
     g.className = 'grid';
     field(g, 'Block Name', makeInput({ value: block.name || '', onChange: v => {
       block.name = v;
       if (!block.id || generatedBlockIds.has(block)) {
-        block.id = uniqueId(v || `block_${i + 1}`, new Set(state.lockouts.blocks.filter(item => item !== block).map(item => item.id)));
+        const id = uniqueId(v || `block_${i + 1}`, new Set(state.lockouts.blocks.filter(item => item !== block).map(item => item.id)));
+        replaceLayoutToken('blocks', itemToken('blocks', block), `item:${id}`);
+        block.id = id;
         generatedBlockIds.add(block);
       }
     } }), 'Friendly name used in this editor. The technical ID is generated automatically.');
+    folderAssignmentField(g, 'blocks', block);
     field(g, 'Rule Type', makeSelect([
       { value: 'duration_block', label: 'Screen-time limit' },
       { value: 'task_block', label: 'Require completed metrics' },
@@ -1383,7 +1518,7 @@
     root.innerHTML = '';
     const intro = document.createElement('div');
     intro.className = 'notice';
-    intro.textContent = 'Blocks are checked from top to bottom. If several rules apply, the first rule that blocks access wins.';
+    intro.textContent = 'Blocks are checked in numbered rule order. If several rules apply, the first rule that blocks access wins.';
     root.appendChild(intro);
     const presets = toggleSection('Preset Modes', 'blocks-presets', true, 'Presets select which blocks apply on a particular day. Add a name here, assign it to blocks, and use that exact name as an all-day event title on your preset calendar. For example, a workday event activates blocks assigned to workday. Use one all-day preset event per day.');
     const calendarSummary = fieldHint(presetCalendarSummary());
@@ -1428,10 +1563,13 @@
       root.appendChild(empty);
     }
     root.appendChild(listTools('blocks'));
-    state.lockouts.blocks.forEach((b, i) => root.appendChild(renderBlock(b, i)));
+    root.appendChild(fieldHint('Blocks run in numbered rule order. Folders organize the view; moving a folder or assigning a block to it keeps rule priority.'));
+    root.appendChild(renderItemList('blocks', renderBlock));
     root.appendChild(searchEmptyMessage('blocks'));
     filterCards('blocks');
-    root.append(button('Add Block', '', () => {
+    const addActions = document.createElement('div');
+    addActions.className = 'row gap';
+    addActions.append(button('Add Block', '', () => {
       const block = newBlock();
       block.name = `Block ${state.lockouts.blocks.length + 1}`;
       block.id = uniqueId(block.name, new Set(state.lockouts.blocks.map(item => item.id)));
@@ -1441,6 +1579,8 @@
       searchQueries.blocks = '';
       renderAll();
     }));
+    addActions.appendChild(createFolderButton('blocks'));
+    root.appendChild(addActions);
   }
 
   function ensureShape(raw) {
@@ -1510,23 +1650,25 @@
       applyMetricTypeDefaults(normalized);
       return normalized;
     });
-    if (raw.metricFolders !== undefined && (!Array.isArray(raw.metricFolders) || raw.metricFolders.some(name => typeof name !== 'string'))) {
-      throw new Error('metricFolders must be a list of folder names.');
-    }
-    merged.metricFolders = [...new Set((raw.metricFolders || []).map(name => name.trim()).filter(Boolean))];
-    merged.metricSettings.forEach(metric => {
-      if (metric.folder === undefined) return;
-      if (typeof metric.folder !== 'string') throw new Error('A metric folder must be a name.');
-      metric.folder = metric.folder.trim();
-      if (!metric.folder) delete metric.folder;
-      else if (!merged.metricFolders.includes(metric.folder)) merged.metricFolders.push(metric.folder);
-    });
     merged.lockouts.blocks = ((merged.lockouts && merged.lockouts.blocks) || []).map((b) => {
       const normalized = { ...newBlock(), ...b, times: { ...newBlock().times, ...(b.times || {}) }, typeSpecific: { ...newBlock().typeSpecific, ...(b.typeSpecific || {}), duration: { ...newBlock().typeSpecific.duration, ...((b.typeSpecific && b.typeSpecific.duration) || {}), rationing: { ...newBlock().typeSpecific.duration.rationing, ...(((b.typeSpecific || {}).duration || {}).rationing || {}) } }, firstXMinutes: { ...newBlock().typeSpecific.firstXMinutes, ...((b.typeSpecific && b.typeSpecific.firstXMinutes) || {}) } }, onBlock: { ...newBlock().onBlock, ...(b.onBlock || {}) } };
       copyItemUiKey(b, normalized);
       if (generatedBlockIds.has(b)) generatedBlockIds.add(normalized);
       return normalized;
     });
+    normalizeFolderMetadata('metrics', merged);
+    normalizeFolderMetadata('blocks', merged);
+    if (raw.editorLayout !== undefined) {
+      if (!raw.editorLayout || typeof raw.editorLayout !== 'object' || Array.isArray(raw.editorLayout)) throw new Error('editorLayout must be an object.');
+      merged.editorLayout = { ...raw.editorLayout };
+      for (const tab of ['metrics', 'blocks']) {
+        const order = raw.editorLayout[tab];
+        if (order !== undefined) {
+          if (!Array.isArray(order) || order.some(token => typeof token !== 'string')) throw new Error('Editor layout order must be a list.');
+          merged.editorLayout[tab] = rootOrder(tab, merged);
+        }
+      }
+    }
     return merged;
   }
 
@@ -1652,7 +1794,6 @@
     if (!root) return;
     if (target.itemKey) {
       searchQueries[tab] = '';
-      if (tab === 'metrics') showAllMetricFolders();
       const search = $(`${tab}Search`);
       if (search) search.value = '';
       filterCards(tab);
