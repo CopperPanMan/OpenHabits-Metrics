@@ -31,7 +31,7 @@ test('infers input and quoting from configured types, supports multiple metrics,
     { metricID: 'note', dataType: 'text' },
     { metricID: 'focus', dataType: 'duration' },
     { metricID: 'started', dataType: 'timestamp' }
-  ]), '[[' + '"done",1],["water",<Provided Input>],["note","<Provided Input>"],["focus","<Provided Input>"],["started"]]');
+  ]), '[[' + '"done",1],["water",<water_provided_input>],["note","<note_provided_input>"],["focus","<focus_provided_input>"],["started"]]');
 });
 
 test('fixed inputs are valid JSON with numeric conversion and lossless text escaping', () => {
@@ -41,15 +41,36 @@ test('fixed inputs are valid JSON with numeric conversion and lossless text esca
   for (const value of ['bad', '', 'Infinity']) assert.throws(() => buildShortcutMetricText([{ metricID: 'n', dataType: 'number', value }]), /valid number/);
 });
 
-test('direct Insights QR permits timestamps and completions and rejects metrics that need live input', () => {
-  for (const dataType of ['number', 'duration', 'text']) assert.throws(() => buildInsightsUrl([{ metricID: 'n', dataType }]), /dedicated logger/);
-  const url = buildInsightsUrl([{ metricID: 'done', dataType: 'number', inputMode: 'completion' }]);
-  assert.equal(decodeURIComponent(url.split('&text=')[1]), '[["done",1]]');
-  assert.throws(() => buildInsightsUrl([undefined]), /Select at least one/);
+test('Insights QR preserves pasted multiple metrics, fixed inputs, Unicode and renamed Shortcuts', () => {
+  const text = buildShortcutMetricText([
+    { metricID: 'done', dataType: 'number', inputMode: 'completion' },
+    { metricID: 'water', dataType: 'number', value: 2 },
+    { metricID: 'note', dataType: 'text', value: 'café & "tea"\n' },
+    { metricID: 'focus', dataType: 'duration', value: '00:25:00' },
+    { metricID: 'started', dataType: 'timestamp' }
+  ]);
+  const url = buildInsightsUrl(text, 'My Insights ☕');
+  assert.equal(decodeURIComponent(url.split('&text=')[1]), text);
+  assert.match(url, /name=My%20Insights%20%E2%98%95&input=text/);
+});
+
+test('Insights QR rejects unresolved numeric, quoted and legacy input placeholders', () => {
+  for (const dataType of ['number', 'duration', 'text']) {
+    assert.throws(() => buildInsightsUrl(buildShortcutMetricText([{ metricID: 'n', dataType }])), /fixed value/);
+  }
+  assert.throws(() => buildInsightsUrl('[["n","<Provided Input>"]]'), /fixed value/);
+});
+
+test('Insights QR rejects malformed JSON and invalid metric tuples before generating a code', () => {
+  assert.throws(() => buildInsightsUrl(''), /Paste/);
+  assert.throws(() => buildInsightsUrl('[broken'), /valid JSON/);
+  for (const input of ['[]', '{}', '[null]', '["metric"]', '[[""]]', '[["bad id"]]', '[["n",null]]', '[["n",true]]', '[["n",{}]]', '[["n",1,2]]', '[["n",1e999]]']) {
+    assert.throws(() => buildInsightsUrl(input), /metric entries/);
+  }
 });
 
 test('builds a credential-free direct Insights URL', () => {
-  const url = buildInsightsUrl(['focus_start']);
+  const url = buildInsightsUrl('[["focus_start"]]');
   assert.match(url, /^shortcuts:\/\/run-shortcut\?name=Insights&input=text&text=/);
   assert.equal(url.includes('secret'), false);
 });

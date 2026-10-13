@@ -20,6 +20,7 @@ function loadEditor() {
       generateSupportingId, pointsEnabled, ensureShape, duplicateMetric, duplicateBlock,
       getPromptRanges,
       reorderItems, itemUiKey, metricCardSummary, blockCardSummary, blockSearchText, collectValidationIssues,
+      addMetricFolder, renameMetricFolder, removeMetricFolder, moveMetricToFolder, moveMetric,
       validateStorageIds, validateState, withHistory, undo, redo,
       setState: config => { state = ensureShape(config); },
       getState: () => state

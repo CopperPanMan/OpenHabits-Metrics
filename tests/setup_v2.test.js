@@ -244,3 +244,13 @@ test('retired app-open reference creates no row and preserves existing history',
   config.metricSettings.push({ metricID: 'old_opened', dataType: 'timestamp' });
   assert.ok(c.openHabitsCollectRequiredRows_(config).some(row => row.id === 'old_opened'));
 });
+
+test('folder metadata validates and reconciles without adding organization rows to the Sheet', () => {
+  const c = load();
+  const config = { trackingSheetName: 'Tracking Data', metricFolders: ['Health', 'Empty'],
+    metricSettings: [{ metricID: 'water', displayName: 'Water', dataType: 'number', folder: 'Health' }] };
+  assert.equal(c.openHabitsValidateConfig_(config).ok, true);
+  assert.deepEqual(Array.from(c.openHabitsCollectRequiredRows_(config), row => row.id), ['water']);
+  const plan = c.openHabitsPlanReconciliation_(config, [['water', 'Water', 2]]);
+  assert.equal(plan.missing.length, 0);
+});
