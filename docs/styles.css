@@ -220,6 +220,12 @@ button.chip-remove { border: 0; border-radius: 999px; padding: 0; width: 1.35rem
 .editor-card[open] > summary { margin-bottom: .8rem; }
 .editor-card > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 .editor-card[hidden], .metric-navigator a[hidden] { display: none; }
+.metric-folder[hidden], #qrMetricTextGroup[hidden] { display: none; }
+.metric-folder > summary { overflow-wrap: anywhere; }
+.folder-tools { display: flex; flex-wrap: wrap; align-items: end; gap: .6rem; margin: .8rem 0; }
+.folder-tools .config-field { flex: 1; min-width: min(220px, 100%); }
+.folder-tools > .field-hint, .folder-tools > .status { flex-basis: 100%; margin: 0; }
+.metric-input-hint { margin: 0 .7rem .5rem; overflow-wrap: anywhere; }
 .card-heading { flex: 1; min-width: 0; }
 .card-heading h3 { margin: 0 0 .2rem; overflow-wrap: anywhere; }
 .card-description { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }

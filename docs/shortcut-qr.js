@@ -15,11 +15,20 @@
     return PREFIX + encodeURIComponent(name);
   }
 
-  function buildInsightsUrl(metrics, shortcutName) {
-    const selected = (metrics || []).filter(Boolean).map(metric => typeof metric === 'string' ? { metricID: metric } : metric);
-    if (!selected.length) throw new Error('Select at least one metric first.');
-    if (selected.some(needsInput)) throw new Error('This metric needs a value. Use a dedicated logger Shortcut QR to collect its input.');
-    const text = buildShortcutMetricText(selected);
+  function buildInsightsUrl(metricText, shortcutName) {
+    const text = String(metricText || '').trim();
+    if (!text) throw new Error('Paste the shortcut-ready metric text first.');
+    if (/<[^<>]*provided[\s_]input[^<>]*>/i.test(text)) {
+      throw new Error('Replace every input placeholder with a fixed value. To ask for a value when scanned, launch your own logger Shortcut instead.');
+    }
+    let entries;
+    try { entries = JSON.parse(text); }
+    catch (_) { throw new Error('Metric text must be valid JSON, such as [["flossed",1]].'); }
+    if (!Array.isArray(entries) || !entries.length || entries.some(entry =>
+      !Array.isArray(entry) || entry.length < 1 || entry.length > 2 ||
+      typeof entry[0] !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(entry[0]) ||
+      (entry.length === 2 && typeof entry[1] !== 'string' && !(typeof entry[1] === 'number' && Number.isFinite(entry[1])))
+    )) throw new Error('Use a list of metric entries: ["metric_id"] or ["metric_id", value], with a number or quoted text value.');
     return buildShortcutUrl(shortcutName || 'Insights') + '&input=text&text=' + encodeURIComponent(text);
   }
 
@@ -39,7 +48,7 @@
         if (metric.dataType === 'number' && (String(metric.value).trim() === '' || !Number.isFinite(value))) throw new Error(`Enter a valid number for ${id}.`);
         return JSON.stringify([id, value]);
       }
-      const placeholder = '<Provided Input>';
+      const placeholder = `<${id}_provided_input>`;
       return `[${JSON.stringify(id)},${metric.dataType === 'number' ? placeholder : JSON.stringify(placeholder)}]`;
     });
     return `[${entries.join(',')}]`;
@@ -47,9 +56,11 @@
 
   function init() {
     if (typeof document === 'undefined') return;
-    const metricSelect = document.getElementById('qrMetricSelect');
     const nameInput = document.getElementById('qrShortcutName');
     const modeInput = document.getElementById('qrLaunchMode');
+    const metricTextInput = document.getElementById('qrMetricText');
+    const metricTextGroup = document.getElementById('qrMetricTextGroup');
+    const modeHint = document.getElementById('qrModeHint');
     const urlInput = document.getElementById('qrLaunchUrl');
     const generateBtn = document.getElementById('qrGenerateBtn');
     const copyBtn = document.getElementById('qrCopyBtn');
@@ -64,12 +75,14 @@
     const shortcutStatus = document.getElementById('shortcutMetricStatus');
     const shortcutGenerateBtn = document.getElementById('shortcutTextGenerate');
     const shortcutCopyBtn = document.getElementById('shortcutTextCopy');
-    if (!metricSelect || !nameInput || !generateBtn || !shortcutSearch || !shortcutOptions) return;
+    if (!nameInput || !modeInput || !metricTextInput || !generateBtn || !shortcutSearch || !shortcutOptions) return;
 
     let canvas = null;
     let configuredMetrics = [];
     const selectedMetricIds = new Set();
     const fixedValues = new Map();
+    const modeNames = { dedicated: '', insights: 'Insights' };
+    let currentMode = modeInput.value;
 
     function renderShortcutOptions() {
       const query = normalizeShortcutName(shortcutSearch.value).toLowerCase();
@@ -104,7 +117,7 @@
           const value = document.createElement('input');
           value.type = metric.dataType === 'number' ? 'number' : 'text';
           if (value.type === 'number') value.step = 'any';
-          value.placeholder = 'Provided Input, or enter a fixed value';
+          value.placeholder = metric.dataType === 'duration' ? 'Fixed duration, e.g. 00:25:00 (optional)' : `Fixed ${metric.dataType} (optional)`;
           value.setAttribute('aria-label', `Value for ${metric.displayName || metric.metricID}`);
           value.value = fixedValues.get(metric.metricID) ?? '';
           value.addEventListener('input', () => {
@@ -113,6 +126,11 @@
             shortcutOutput.value = '';
           });
           row.appendChild(value);
+          const hint = document.createElement('p');
+          hint.className = 'field-hint metric-input-hint';
+          const expectedValue = { number: 'a number, e.g. 2', text: 'text, e.g. A good day', duration: 'elapsed time in HH:MM:SS, e.g. 00:25:00' }[metric.dataType];
+          hint.textContent = `Leave blank to generate <${metric.metricID}_provided_input>, then replace it with the magic variable from the input action for ${metric.displayName || metric.metricID}. Expected value: ${expectedValue}. Or enter a fixed value here.`;
+          row.appendChild(hint);
         }
         checkbox.addEventListener('change', renderShortcutOptions);
         shortcutOptions.appendChild(row);
@@ -135,7 +153,7 @@
       try {
         shortcutOutput.value = buildShortcutMetricText(selectedShortcutMetrics());
         shortcutStatus.textContent = selectedShortcutMetrics().some(metric => needsInput(metric) && metric.value === undefined)
-          ? 'Replace each <Provided Input> with that metric’s magic variable. Value types and quotes are already set.'
+          ? 'Each placeholder names its metric. Replace it with the magic variable from that metric’s input action. Value types and quotes are already set.'
           : 'Ready to paste into the Shortcut Text action.';
         return true;
       } catch (error) {
@@ -154,18 +172,6 @@
         : 'No metrics selected.';
       shortcutOutput.value = '';
       renderShortcutOptions();
-
-      const previous = metricSelect.value;
-      metricSelect.replaceChildren(new Option('Select a metric to suggest a Shortcut name', ''));
-      configuredMetrics.forEach((metric) => {
-        const suggestion = normalizeShortcutName(metric.displayName || metric.metricID);
-        if (!suggestion) return;
-        const label = metric.metricID && metric.metricID !== suggestion ? `${suggestion} — ${metric.metricID}` : suggestion;
-        const option = new Option(label, suggestion);
-        option.dataset.metricId = metric.metricID;
-        metricSelect.add(option);
-      });
-      if ([...metricSelect.options].some(option => option.value === previous)) metricSelect.value = previous;
     }
 
     function setOutputEnabled(enabled) {
@@ -210,15 +216,14 @@
     function generate() {
       try {
         const shortcutName = normalizeShortcutName(nameInput.value);
-        const selectedOption = metricSelect.options[metricSelect.selectedIndex];
-        const metricID = selectedOption && selectedOption.dataset.metricId;
-        const url = modeInput && modeInput.value === 'insights' ? buildInsightsUrl([configuredMetrics.find(metric => metric.metricID === metricID)], 'Insights') : buildShortcutUrl(shortcutName);
+        if (!shortcutName) throw new Error('Enter a Shortcut name first.');
+        const url = modeInput.value === 'insights' ? buildInsightsUrl(metricTextInput.value, shortcutName) : buildShortcutUrl(shortcutName);
         nameInput.value = shortcutName;
         drawQr(url, shortcutName);
         urlInput.value = url;
         openLink.href = url;
         setOutputEnabled(true);
-        status.textContent = modeInput && modeInput.value === 'insights' ? 'Direct Insights QR generated. It contains the metric ID, never your secret or deployment URL.' : 'QR code generated. Scan it on a device where this Shortcut is installed.';
+        status.textContent = modeInput.value === 'insights' ? 'QR code generated. It sends the metric text to your installed Insights Shortcut; connection credentials come from your phone’s settings.' : 'QR code generated. Scan it on a device where this Shortcut is installed.';
       } catch (error) {
         canvas = null;
         urlInput.value = '';
@@ -228,8 +233,36 @@
       }
     }
 
-    metricSelect.addEventListener('change', () => {
-      if (metricSelect.value) nameInput.value = metricSelect.value;
+    function clearQr() {
+      canvas = null;
+      urlInput.value = '';
+      preview.innerHTML = '<p class="muted">Your QR code will appear here.</p>';
+      status.textContent = '';
+      setOutputEnabled(false);
+    }
+
+    function updateMode() {
+      const insights = modeInput.value === 'insights';
+      metricTextGroup.hidden = !insights;
+      modeHint.textContent = insights
+        ? 'Log metrics without a separate logger Shortcut for each metric. Insights must still be installed and set up on your phone. The QR sends fixed input; it does not ask for values.'
+        : 'Launch an installed Shortcut by its exact name. Use this for loggers that ask for input or perform other actions.';
+      nameInput.placeholder = insights ? 'Insights' : 'Log Meditation';
+    }
+
+    modeInput.addEventListener('change', () => {
+      modeNames[currentMode] = nameInput.value;
+      currentMode = modeInput.value;
+      nameInput.value = modeNames[currentMode];
+      updateMode();
+      clearQr();
+    });
+    nameInput.addEventListener('input', clearQr);
+    metricTextInput.addEventListener('input', clearQr);
+    document.getElementById('qrUseMetricText').addEventListener('click', () => {
+      if (!shortcutOutput.value && !generateShortcutText()) return;
+      metricTextInput.value = shortcutOutput.value;
+      clearQr();
     });
     nameInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') generate();
@@ -264,6 +297,7 @@
     });
 
     document.addEventListener('openhabits:metrics-changed', event => updateConfiguredMetrics(event.detail));
+    updateMode();
     updateConfiguredMetrics(window.OpenHabitsConfiguredMetrics || []);
   }
 

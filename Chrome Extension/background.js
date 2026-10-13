@@ -31,6 +31,7 @@ const UNLOCK_WINDOWS = {
 
 const SERVER_DECISION_KEYS = ['app_closer'];
 const ACTIVE_SESSION_KEYS = ['activeScreenTimeSession', 'sessionCandidateToken'];
+const SERVER_TIMEOUT_MS = 3000;
 
 chrome.runtime.onInstalled.addListener(async () => {
   const existing = await chrome.storage.local.get(Object.keys(DEFAULTS));
@@ -171,15 +172,15 @@ async function handleUnlockAttempt(type, targetUrl, sender) {
     notify('Legitimate unlock granted for 20 minutes.');
   }
 
-  await sendMetricIfConfigured(rules.metricID, cfg);
-
-  const illegalUnlockMetricID = String(cfg.illegalUnlockMetricID || '').trim();
-  if (type === 'illegal' && illegalUnlockMetricID) {
-    await sendMetricIfConfigured(illegalUnlockMetricID, cfg);
-  }
-
   if (targetUrl && sender && sender.tab && sender.tab.id) {
     await chrome.tabs.update(sender.tab.id, { url: targetUrl });
+  }
+
+  // Logging is best effort and must never hold up access to the website.
+  void sendMetricIfConfigured(rules.metricID, cfg);
+  const illegalUnlockMetricID = String(cfg.illegalUnlockMetricID || '').trim();
+  if (type === 'illegal' && illegalUnlockMetricID) {
+    void sendMetricIfConfigured(illegalUnlockMetricID, cfg);
   }
 
   return {
@@ -361,7 +362,7 @@ async function handlePotentialSessionTransition(tabId, tab, details) {
   if (now < unlockedUntil) {
     const remainingMin = Math.ceil((unlockedUntil - now) / 60000);
     notify(`Lockouts: ${remainingMin}m remaining in current unlock session.`);
-    await sendMetricIfConfigured('session_active', cfg);
+    void sendMetricIfConfigured('session_active', cfg);
     return;
   }
 
@@ -386,7 +387,8 @@ async function handlePotentialSessionTransition(tabId, tab, details) {
     return;
   }
 
-  await startScreenTimeSessionIfEligible(effectiveTab, cfg, candidateToken);
+  if (serverDecision.warning) await reportServerWarning(serverDecision.warning);
+  await startScreenTimeSessionIfEligible(effectiveTab, cfg, candidateToken, Boolean(serverDecision.warning));
 }
 
 async function shouldKeepCurrentSession(cfg, tab) {
@@ -394,6 +396,9 @@ async function shouldKeepCurrentSession(cfg, tab) {
   if (!session) {
     return false;
   }
+
+  // A fail-open session must check again on the next navigation/activation.
+  if (session.decisionUnavailable) return false;
 
   if (!cfg.screenTimeLoggingEnabled) {
     return false;
@@ -454,7 +459,7 @@ async function isStableCandidateStillCurrent(candidateToken, tabId, url, cfg) {
   return isStableActiveTab(tabId, cfg);
 }
 
-async function startScreenTimeSessionIfEligible(tab, cfg, candidateToken) {
+async function startScreenTimeSessionIfEligible(tab, cfg, candidateToken, decisionUnavailable = false) {
   await clearSessionCandidate(candidateToken);
 
   if (!cfg.screenTimeLoggingEnabled || !cfg.screenTimeDurationMetricID) {
@@ -469,7 +474,8 @@ async function startScreenTimeSessionIfEligible(tab, cfg, candidateToken) {
     tabId: tab.id,
     windowId: tab.windowId,
     url: tab.url,
-    startedAt: Date.now()
+    startedAt: Date.now(),
+    decisionUnavailable
   };
 
   await chrome.storage.local.set({ activeScreenTimeSession: session });
@@ -490,7 +496,7 @@ async function endScreenTimeSessionIfNeeded(details, cfgOverride) {
 
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - Number(session.startedAt || Date.now())) / 1000));
   if (elapsedSeconds > 0) {
-    await sendMetricIfConfigured(cfg.screenTimeDurationMetricID, cfg, secondsToDuration(elapsedSeconds));
+    void sendMetricIfConfigured(cfg.screenTimeDurationMetricID, cfg, secondsToDuration(elapsedSeconds));
   }
 }
 
@@ -562,12 +568,13 @@ async function queryServerBlockDecision(cfg) {
     if (!result.shouldFallback) {
       return {
         allowed: result.allowed,
-        message: result.message
+        message: result.message,
+        warning: result.warning
       };
     }
   }
 
-  return { allowed: false, message: 'Access blocked because the server could not provide a lockout decision. Check the extension connection settings and try again.' };
+  return unavailableServerDecision('The server could not provide a lockout decision. Check the extension connection settings.');
 }
 
 function getServerDecisionKeys() {
@@ -613,6 +620,18 @@ function deniedServerDecision(message, retryable = false) {
   return { allowed: false, message, shouldFallback: false, retryable };
 }
 
+function unavailableServerDecision(message, retryable = false) {
+  return { allowed: true, message: '', warning: `Website access allowed. ${message}`, shouldFallback: false, retryable };
+}
+
+async function reportServerWarning(message) {
+  const now = Date.now();
+  const { lastServerWarningAt } = await chrome.storage.local.get(['lastServerWarningAt']);
+  if (now - Number(lastServerWarningAt || 0) < 60000) return;
+  await chrome.storage.local.set({ lastServerWarningAt: now });
+  await notify(message);
+}
+
 function serverDecisionMessage(data, cfg) {
   const errors = [].concat(
     Array.isArray(data.errors) ? data.errors : [],
@@ -648,12 +667,12 @@ function ruleBlockMessage(data) {
 
 async function fetchServerDecisionForKey(cfg, decisionKey) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), SERVER_TIMEOUT_MS);
   try {
     const response = await postServerJson(cfg, decisionKey, null, controller.signal);
     if (!response.ok) {
-      return deniedServerDecision(
-        `Access blocked because the lockouts server returned HTTP ${response.status}. Check the web app deployment and try again.`,
+      return unavailableServerDecision(
+        `The lockouts server returned HTTP ${response.status}. Check the web app deployment.`,
         response.status === 429 || response.status >= 500
       );
     }
@@ -664,10 +683,10 @@ async function fetchServerDecisionForKey(cfg, decisionKey) {
       // Apps Script authentication errors are JSON served as text/plain.
       data = JSON.parse(bodyText);
     } catch (error) {
-      return deniedServerDecision('Access blocked because the lockouts server returned an unreadable response. Check your Apps Script /exec URL and deployment access permissions.');
+      return unavailableServerDecision('The lockouts server returned an unreadable response. Check your Apps Script /exec URL and deployment access permissions.');
     }
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
-      return deniedServerDecision('Access blocked because the lockouts server returned an invalid decision. Check the web app deployment.');
+      return unavailableServerDecision('The lockouts server returned an invalid decision. Check the web app deployment.');
     }
     if (data.status === 'allowed') {
       return { allowed: true, message: '', shouldFallback: false };
@@ -676,13 +695,13 @@ async function fetchServerDecisionForKey(cfg, decisionKey) {
       return deniedServerDecision(ruleBlockMessage(data));
     }
     const details = serverDecisionMessage(data, cfg);
-    return deniedServerDecision(details
-      ? `Access blocked because the lockouts server reported an error: ${details}`
-      : 'Access blocked because the lockouts server did not return a recognized decision. Check the web app deployment and configuration.');
+    return unavailableServerDecision(details
+      ? `The lockouts server reported an error: ${details}`
+      : 'The lockouts server did not return a recognized decision. Check the web app deployment and configuration.');
   } catch (error) {
-    return deniedServerDecision(controller.signal.aborted
-      ? 'Access blocked because the lockouts server took too long to respond. Try opening the site again.'
-      : 'Access blocked because the extension could not connect to the lockouts server. Check your connection and try opening the site again.', true);
+    return unavailableServerDecision(controller.signal.aborted
+      ? 'The lockouts server took too long to respond.'
+      : 'The extension could not connect to the lockouts server. Check your connection.', true);
   } finally {
     clearTimeout(timeout);
   }
@@ -693,11 +712,15 @@ async function sendMetricIfConfigured(metricID, cfg, value) {
     return;
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SERVER_TIMEOUT_MS);
   try {
     const tuple = value === undefined ? [metricID] : [metricID, value];
-    await postServerJson(cfg, cfg.metricLogKey || DEFAULTS.metricLogKey, [tuple]);
+    await postServerJson(cfg, cfg.metricLogKey || DEFAULTS.metricLogKey, [tuple], controller.signal);
   } catch (error) {
     // best effort metric logging
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
