@@ -453,6 +453,31 @@ function commitCache(s, response) {
   return {cacheOK: 1};
 }
 
+function acknowledgeTimer(s, metricID, submittedSeconds, response) {
+  const kept = {acknowledged: 0, notification:
+    "Duration kept locally. Recording was not confirmed; check the Sheet before submitting again."};
+  const seconds = Number(submittedSeconds);
+  if (typeof metricID !== "string" || !metricID.trim() || !["number", "string"].includes(typeof submittedSeconds) ||
+      String(submittedSeconds).trim() === "" || !Number.isFinite(seconds) || seconds < 0)
+    return kept;
+  let record;
+  try { record = object(response, "Timer recording response"); } catch (_) { return kept; }
+  if (record.ok !== true || !Array.isArray(record.metricsByID) || !record.metricsByID.some(item =>
+    item && item.metricID === metricID && (item.status === "written" || item.status === "late_overwritten") &&
+    item.found !== false && (item.errors === undefined || (Array.isArray(item.errors) && item.errors.length === 0)))) return kept;
+  // Read the latest state only after acknowledgement; preserve other timers and
+  // any time added after this submission. No HTTP retry or cache download here.
+  const state = object(s.read("timerStates.json"), "Timer state");
+  const key = `${metricID}_pendingSeconds`;
+  const pending = Number(state[key]);
+  if (!Object.prototype.hasOwnProperty.call(state, key) || !["number", "string"].includes(typeof state[key]) ||
+      String(state[key]).trim() === "" || !Number.isFinite(pending) || pending < 0)
+    return kept;
+  state[key] = Math.max(0, pending - seconds);
+  s.write("timerStates.json", state);
+  return {acknowledged: 1, remainingPending: state[key], notification: ""};
+}
+
 function dispatch(raw, s, now) {
   const list = Array.isArray(raw) ? raw : [raw];
 
@@ -503,6 +528,9 @@ function dispatch(raw, s, now) {
 
     case "cache_commit":
       return commitCache(s, list[1]);
+
+    case "timer_ack":
+      return acknowledgeTimer(s, list[1], list[2], list[3]);
 
     default:
       throw new Error("Unknown OpenHabits Runtime command.");

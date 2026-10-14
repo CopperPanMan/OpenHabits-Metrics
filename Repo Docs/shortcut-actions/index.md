@@ -1,25 +1,20 @@
 # Metrics Shortcut readouts
 
-| Shortcut | Source/status |
+Complete manual action flows updated 2026-10-14 for OpenHabits Runtime 1.2.2 and the current server contracts. They incorporate the shared-Shortcut audit and the agreed native fixes. Replace the corresponding action flows using these readouts; Git history retains the older versions. These describe corrected target flows, rather than a verbatim dump of existing buggy exports. Updating documentation does not change shared iCloud links or installed Shortcuts, and the rebuilt flows need device verification.
+
+| Shortcut | Full readout |
 | --- | --- |
-| Locked | Runtime 1.1.1 sequence in [Locked.md](Locked.md), adapted with optional blocking-app comments for publication |
-| Allowed | Runtime sequence in [Allowed.md](Allowed.md), adapted with an optional blocking-app comment |
-| Update Lockout Cache | Complete two-phase native HTTP sequence; implemented by the user |
-| Insights | Normalized readout in [Insights.md](Insights.md); installer runs when Update Lockout Cache is present; logging remains native |
-| Toggle Timer Template | [Publication notes](Toggle%20Timer%20Template.md) preload time_working; historical transcription retained, timer not refactored |
-| Metric(s) Logger Template | [Publication readout](Metric%28s%29%20Logger%20Template.md) preloads the water/count and latest-timestamp demo; historical transcription retained |
+| Insights | [Setup, logging, cache/Calendar hooks, and Notion](Insights.md) |
+| Update Lockout Cache | [Prepare, native HTTP, commit, and status return](Update%20Lockout%20Cache.md) |
+| Toggle Timer Template | [Initialization, start/stop, pending duration, optional actions, and acknowledgement](Toggle%20Timer%20Template.md) |
+| Metric(s) Logger Template | [Native logging demo](Metric%28s%29%20Logger%20Template.md) |
+| Locked | [Runtime evaluation, preset Title, and blocking/allow flows](Locked.md) |
+| Allowed | [Unlock selection and allowed-session handling](Allowed.md) |
 
-The original Insights transcription and its legacy installer are also preserved
-under source-transcriptions for provenance. The legacy installer uses Request
-and skips existing files; it is historical source, not the recommended installer.
-Use Inline Scriptable/Insights Installer.js and the continuous Insights action list.
+Arrows label magic-variable outputs; Set Variable lines are real actions. Read the type notes in each flow. `cacheOK` is numeric 0/1; `ok` and `writeToNotion` are Booleans. Scriptable Run Script uses Run in App Off and Output Type Dictionary unless specified otherwise. The inline Insights installer is [Insights Installer.js](../../Inline%20Scriptable/Insights%20Installer.js); paste the complete source into Run Inline Script and leave Parameter empty. It downloads OpenHabits Runtime and lockouts.js; update existing scripts directly when needed.
 
-Trailing whitespace was normalized in the source snapshots; repository URLs
-were updated after the repository rename. Other source content was retained. Original
-transcriptions may have omitted indentation, typos, or a missing branch.
-Their ambiguity is recorded in ../runtime-review-notes.md, not silently fixed.
-These documents are manual action specifications; there are no editable/signed
-iOS Shortcut exports in this checkpoint. Published iCloud links belong on
-[Downloads](../downloads.md); updating a readout does not change installed shortcuts.
-Calendar Alarms is a separate repo;
-this checkpoint documents the optional integration and changes no CA source.
+Insights logging and timer start/stop remain native. The rebuilt timer uses one Scriptable acknowledgement call to avoid a large native response/state-checking block; it needs the matching Runtime installed. Scriptable is also needed for cache/lockout integration, while plain logging remains native. Update Lockout Cache returns a status Dictionary and never calls the full Calendar Alarm Engine. The optional Insights Engine hook requires the [companion Calendar Alarms changes](https://github.com/CopperPanMan/Calendar-Alarms-for-iOS/pull/121), which interpret a metric response as completion-only cleanup. Calendar Alarms Actions consumes this cache status.
+
+The original handwritten transcriptions and legacy installer remain in `source-transcriptions/` for provenance. They can contain omissions or superseded behavior; use the full readouts above to rebuild. Current sharing links are on [Downloads](../downloads.md). Optional app, wallpaper, calendar, and Focus actions should be customized on the device.
+
+Prefer short native flows when choosing between equivalent designs, including moving parsing/state work into the existing Runtime. These readouts are proposed rebuilds; they are not a claim that all helper flows have already been adopted on-device. Keep working native behavior when a minor action-count reduction would require disproportionate rebuilding. The timer's acknowledgement/state update uses one helper call; device actions and HTTP stay native.

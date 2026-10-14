@@ -1,6 +1,6 @@
 # Metric(s) Logger Template
 
-Publication readout for the shared template and setup demo. These instructions do not modify installed or signed Shortcut exports. The historical source transcription is retained separately.
+Full action readout, 2026-10-14, for the shared template and setup demo. The native logger flow is unchanged. These instructions do not modify installed or signed Shortcut exports. The historical source transcription is retained separately.
 
 ```text
 VIBRATE DEVICE
