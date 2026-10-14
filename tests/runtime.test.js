@@ -199,8 +199,54 @@ test('bad HTTP responses preserve previous cache; valid text or dictionary commi
     assert.deepEqual(s.files, before);
     assert.equal(s.writes.length, 0);
   }
-  assert.equal(Object.keys(run(['cache_commit', JSON.stringify(cache(0))], s)).length, 0);
+  assert.equal(run(['cache_commit', JSON.stringify(cache(0))], s).cacheOK, 1);
   assert.equal(s.writes.length, 1);
+});
+
+test('completion patches update reminders even when values are unchanged, without renewing the snapshot', () => {
+  const c = cache();
+  c.generatedAtISO = c.lastUpdated;
+  c.reminderState = {byID: {a: {complete: false, displayName: 'A'}, b: {complete: true}}};
+  const s = storage({'lockoutCache.json': c, 'settings.json': settings});
+  const r = run(['cache_prepare', {ok: true, metricsByID: [
+    {metricID: 'a', value: 1, complete: true, status: 'written'},
+    {metricID: 'b', value: '', complete: false, status: 'written'}
+  ]}], s);
+  assert.equal(r.cacheOK, 1);
+  assert.equal(r.updatedState, 1);
+  assert.equal(s.writes.length, 1);
+  assert.equal(s.files['lockoutCache.json'].reminderState.byID.a.complete, true);
+  assert.equal(s.files['lockoutCache.json'].reminderState.byID.b.complete, false);
+  assert.equal(s.files['lockoutCache.json'].reminderState.byID.a.displayName, 'A');
+  assert.equal(s.files['lockoutCache.json'].generatedAtISO, c.generatedAtISO);
+  assert.equal(s.files['lockoutCache.json'].lastUpdated, c.lastUpdated);
+  assert.equal(run(['cache_prepare', 'fetch_new_cache'], s).url !== undefined, true);
+});
+
+test('failed, unknown, and incomplete response entries cannot corrupt cached completion or values', () => {
+  const c = cache(); c.reminderState = {byID: {a: {complete: true}}};
+  const s = storage({'lockoutCache.json': c});
+  for (const metric of [
+    {metricID: 'a', value: 0, complete: false, status: 'error'},
+    {metricID: 'a', value: 0, complete: false, errors: ['Unable to save']},
+    {metricID: 'a', value: 0, complete: false, found: false},
+    {metricID: 'unknown', value: 0, complete: true}
+  ]) run(['cache_prepare', {metricsByID: [metric]}], s);
+  assert.equal(s.writes.length, 0);
+  assert.equal(s.files['lockoutCache.json'].reminderState.byID.a.complete, true);
+});
+
+test('refresh status distinguishes throttled current caches, requests, failures and commits', () => {
+  const s = storage({'lockoutCache.json': cache(5000), 'settings.json': settings});
+  assert.equal(run(['cache_prepare', 'fetch_new_cache'], s).cacheOK, 1);
+  s.files['lockoutCache.json'] = cache(5000, '+0530');
+  assert.equal(run(['cache_prepare', 'fetch_new_cache'], s).cacheOK, 0);
+  s.files['lockoutCache.json'] = cache(60000);
+  assert.equal(run(['cache_prepare', 'fetch_new_cache'], s).cacheOK, 0);
+  const before = clone(s.files);
+  assert.equal(run(['cache_commit', {ok: false, metricsByID: []}], s).cacheOK, 0);
+  assert.deepEqual(s.files, before);
+  assert.equal(run(['cache_commit', cache(0)], s).cacheOK, 1);
 });
 
 test('corrupt state, missing settings, and unsupported old envelopes reject without mutation', () => {
