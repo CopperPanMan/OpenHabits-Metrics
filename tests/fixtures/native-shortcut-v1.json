@@ -1,0 +1,10 @@
+{
+  "metricResponse": {
+    "ok": true,
+    "metricsByID": [{"metricID": "a", "value": 1, "complete": true, "status": "written", "errors": []}]
+  },
+  "timerResponse": {
+    "ok": true,
+    "metricsByID": [{"metricID": "time_working", "status": "written", "errors": []}]
+  }
+}

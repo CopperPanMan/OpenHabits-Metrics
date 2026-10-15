@@ -340,7 +340,7 @@ function prepareCache(s, now, input) {
         !item ||
         typeof item.metricID !== "string" ||
         item.status === "error" || item.found === false ||
-        (Array.isArray(item.errors) && item.errors.length > 0) ||
+        (item.errors != null && (!Array.isArray(item.errors) || item.errors.length > 0)) ||
         !Object.prototype.hasOwnProperty.call(
           entries,
           item.metricID

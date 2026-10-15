@@ -1,6 +1,6 @@
 # Locked
 
-Full action readout, 2026-10-14, for OpenHabits Runtime 1.2.2 and lockouts.js. It includes the audited `shortcut.name` binding and explicit preset Title extraction. Blocking-app actions remain optional comments to customize. Updating this file does not update installed or shared Shortcut exports. Expected-preset tracking is handled by the runtime behind the existing calls.
+Full action readout, 2026-10-15, for OpenHabits Runtime 1.2.2 and lockouts.js. It includes the audited `shortcut.name` binding and explicit preset Title extraction. Blocking-app actions remain optional comments to customize. Updating this file does not update installed or shared Shortcut exports. Expected-preset tracking is handled by the runtime behind the existing calls.
 Arrows label magic-variable outputs. All Run Script actions use Run in App: Off.
 The ending calendar alarm uses `calendarEnd` directly, with zero offset; do not
 subtract another minute in the event notes or native actions.
@@ -33,8 +33,11 @@ IF Route is evaluate
         Item 3: PresetTitle
     RUN SCRIPT: OpenHabits Runtime
         Parameter: List
+        Output Type: Text
+        -> EvaluatorInputJSON (Text)
     RUN SCRIPT: lockouts
-        Parameter: Previous Script Result
+        Parameter: EvaluatorInputJSON
+        Output Type: Dictionary
         -> Evaluation
     GET DICTIONARY VALUE: status from Evaluation
         -> Status

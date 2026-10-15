@@ -7,6 +7,7 @@ const context = vm.createContext({ Date, Intl });
 vm.runInContext(source.replace(/await main\(\);\s*$/, ''), context);
 const now = new Date('2026-10-05T16:00:37.250Z');
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
+const nativeV1 = require('./fixtures/native-shortcut-v1.json');
 const settings = { webAppId: 'test-deployment', openHabitsSecret: 'secret with ?&' };
 function cache(age = 60000, offset = context.offset(now)) {
   return { ok: true, schemaVersion: 'lockouts_cache_v1',
@@ -21,6 +22,28 @@ function storage(files = {}) {
     write(name, value) { this.files[name] = clone(value); this.writes.push(name); } };
 }
 function run(input, s, at = now) { return context.dispatch(input, s, at); }
+
+test('v1 native cache requests preserve legacy updatedState and numeric cacheOK', () => {
+  const c = cache(); c.reminderState = {byID: {a: {complete: false}}};
+  const s = storage({'lockoutCache.json': c, 'settings.json': settings});
+  const patched = run(['cache_prepare', JSON.stringify(nativeV1.metricResponse)], s);
+  assert.equal(patched.updatedState, 1); assert.equal(patched.cacheOK, 1);
+  const request = run(['cache_prepare', 'fetch_new_cache'], s);
+  assert.equal(request.updatedState, ''); assert.equal(request.cacheOK, 0);
+  assert.equal(typeof request.url, 'string'); assert.equal(typeof request.secret, 'string');
+  assert.equal(typeof request.clientNow, 'string');
+  assert.equal(run(['cache_commit', JSON.stringify(cache(0))], s).cacheOK, 1);
+});
+
+test('v1 native timer and evaluator List requests retain their output types', () => {
+  const s = storage({'timerStates.json': {time_working_pendingSeconds: 60}, 'lockoutCache.json': cache()});
+  const result = run(['timer_ack', 'time_working', 60, nativeV1.timerResponse], s);
+  assert.equal(result.acknowledged, 1); assert.equal(result.remainingPending, 0);
+  assert.equal(typeof result.notification, 'string');
+  const evaluated = run(['evaluator_input', {cacheJSON: JSON.stringify(cache())}, 'Today'], s);
+  assert.equal(typeof evaluated, 'string'); assert.equal(JSON.parse(evaluated).presetOverride, 'Today');
+  assert.equal(typeof run('begin_legitimate', s).notification, 'string');
+});
 
 test('timer acknowledgement clears only confirmed submitted seconds from the latest state', () => {
   for (const status of ['written', 'late_overwritten']) {
@@ -276,6 +299,7 @@ test('failed, unknown, and incomplete response entries cannot corrupt cached com
   for (const metric of [
     {metricID: 'a', value: 0, complete: false, status: 'error'},
     {metricID: 'a', value: 0, complete: false, errors: ['Unable to save']},
+    {metricID: 'a', value: 0, complete: false, errors: 'Unable to save'},
     {metricID: 'a', value: 0, complete: false, found: false},
     {metricID: 'unknown', value: 0, complete: true}
   ]) run(['cache_prepare', {metricsByID: [metric]}], s);

@@ -18,3 +18,5 @@ Insights logging and timer start/stop remain native. The rebuilt timer uses one 
 The original handwritten transcriptions and legacy installer remain in `source-transcriptions/` for provenance. They can contain omissions or superseded behavior; use the full readouts above to rebuild. Current sharing links are on [Downloads](../downloads.md). Optional app, wallpaper, calendar, and Focus actions should be customized on the device.
 
 Prefer short native flows when choosing between equivalent designs, including moving parsing/state work into the existing Runtime. These readouts are proposed rebuilds; they are not a claim that all helper flows have already been adopted on-device. Keep working native behavior when a minor action-count reduction would require disproportionate rebuilding. The timer's acknowledgement/state update uses one helper call; device actions and HTTP stay native.
+
+The [native interface v1](../native-shortcut-interface.md) records the commands, types, and compatibility rules to preserve across future script releases. Saved native-request fixtures exercise these calls so code changes do not silently require another native rebuild.
