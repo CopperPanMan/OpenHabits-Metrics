@@ -2,7 +2,7 @@
 // These must be at the very top of the file. Do not edit.
 // icon-color: blue; icon-glyph: code;
 
-const RUNTIME_VERSION = "1.2.1";
+const RUNTIME_VERSION = "1.2.2";
 
 // Clock alarms are scheduled to whole minutes. Advance both the calendar
 // event end and local access expiry so an alarm cannot precede local expiry.
@@ -339,6 +339,8 @@ function prepareCache(s, now, input) {
       if (
         !item ||
         typeof item.metricID !== "string" ||
+        item.status === "error" || item.found === false ||
+        (item.errors != null && (!Array.isArray(item.errors) || item.errors.length > 0)) ||
         !Object.prototype.hasOwnProperty.call(
           entries,
           item.metricID
@@ -352,16 +354,20 @@ function prepareCache(s, now, input) {
       if (
         !entry ||
         typeof entry !== "object" ||
-        Array.isArray(entry) ||
-        item.value === undefined ||
-        item.value === null ||
-        item.value === ""
+        Array.isArray(entry)
       ) {
         continue;
       }
 
-      if (String(entry.value) !== String(item.value)) {
+      if (item.value !== undefined && item.value !== null && item.value !== "" &&
+          String(entry.value) !== String(item.value)) {
         entry.value = item.value;
+        changed = true;
+      }
+      const reminder = cache.reminderState?.byID?.[item.metricID];
+      if (reminder && typeof reminder === "object" && !Array.isArray(reminder) &&
+          typeof item.complete === "boolean" && reminder.complete !== item.complete) {
+        reminder.complete = item.complete;
         changed = true;
       }
     }
@@ -373,6 +379,7 @@ function prepareCache(s, now, input) {
     }
 
     return {
+      cacheOK: 1,
       updatedState: changed ? 1 : ""
     };
   }
@@ -380,6 +387,7 @@ function prepareCache(s, now, input) {
   // Preserve the existing throttle, including forced refreshes.
   if (valid && age >= 0 && age <= 15000) {
     return {
+      cacheOK: fresh ? 1 : 0,
       updatedState: ""
     };
   }
@@ -400,6 +408,7 @@ function prepareCache(s, now, input) {
   }
 
   const result = {
+    cacheOK: 0,
     updatedState: "",
     url:
       `https://script.google.com/macros/s/${settings.webAppId}/exec`,
@@ -432,6 +441,7 @@ function commitCache(s, response) {
     cache = validateCache(response);
   } catch (_) {
     return {
+      cacheOK: 0,
       notification:
         "Error: unable to access Google Drive at this time. " +
         "Invalid OpenHabits cache response. Previous cache retained."
@@ -440,7 +450,32 @@ function commitCache(s, response) {
 
   s.write("lockoutCache.json", cache);
 
-  return {};
+  return {cacheOK: 1};
+}
+
+function acknowledgeTimer(s, metricID, submittedSeconds, response) {
+  const kept = {acknowledged: 0, notification:
+    "Duration kept locally. Recording was not confirmed; check the Sheet before submitting again."};
+  const seconds = Number(submittedSeconds);
+  if (typeof metricID !== "string" || !metricID.trim() || !["number", "string"].includes(typeof submittedSeconds) ||
+      String(submittedSeconds).trim() === "" || !Number.isFinite(seconds) || seconds < 0)
+    return kept;
+  let record;
+  try { record = object(response, "Timer recording response"); } catch (_) { return kept; }
+  if (record.ok !== true || !Array.isArray(record.metricsByID) || !record.metricsByID.some(item =>
+    item && item.metricID === metricID && (item.status === "written" || item.status === "late_overwritten") &&
+    item.found !== false && (item.errors === undefined || (Array.isArray(item.errors) && item.errors.length === 0)))) return kept;
+  // Read the latest state only after acknowledgement; preserve other timers and
+  // any time added after this submission. No HTTP retry or cache download here.
+  const state = object(s.read("timerStates.json"), "Timer state");
+  const key = `${metricID}_pendingSeconds`;
+  const pending = Number(state[key]);
+  if (!Object.prototype.hasOwnProperty.call(state, key) || !["number", "string"].includes(typeof state[key]) ||
+      String(state[key]).trim() === "" || !Number.isFinite(pending) || pending < 0)
+    return kept;
+  state[key] = Math.max(0, pending - seconds);
+  s.write("timerStates.json", state);
+  return {acknowledged: 1, remainingPending: state[key], notification: ""};
 }
 
 function dispatch(raw, s, now) {
@@ -493,6 +528,9 @@ function dispatch(raw, s, now) {
 
     case "cache_commit":
       return commitCache(s, list[1]);
+
+    case "timer_ack":
+      return acknowledgeTimer(s, list[1], list[2], list[3]);
 
     default:
       throw new Error("Unknown OpenHabits Runtime command.");
@@ -658,6 +696,7 @@ async function main() {
   } catch (error) {
     result = {
       route: "block",
+      cacheOK: 0,
       updatedState: "",
       notification:
         `OpenHabits: ${error.message || String(error)}`

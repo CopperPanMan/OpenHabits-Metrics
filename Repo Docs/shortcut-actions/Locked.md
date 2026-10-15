@@ -1,9 +1,6 @@
 # Locked
 
-Status: runtime-based action readout adapted for publication. The original native
-sequence was implemented by the user; this version replaces blocking-app actions
-with optional comments. It does not update installed or shared Shortcut exports.
-Runtime 1.2.0 adds expected-preset tracking behind these existing calls; the native sequence remains compatible.
+Full action readout, 2026-10-15, for OpenHabits Runtime 1.2.2 and lockouts.js. It includes the audited `shortcut.name` binding and explicit preset Title extraction. Blocking-app actions remain optional comments to customize. Updating this file does not update installed or shared Shortcut exports. Expected-preset tracking is handled by the runtime behind the existing calls.
 Arrows label magic-variable outputs. All Run Script actions use Run in App: Off.
 The ending calendar alarm uses `calendarEnd` directly, with zero offset; do not
 subtract another minute in the event notes or native actions.
@@ -36,8 +33,11 @@ IF Route is evaluate
         Item 3: PresetTitle
     RUN SCRIPT: OpenHabits Runtime
         Parameter: List
+        Output Type: Text
+        -> EvaluatorInputJSON (Text)
     RUN SCRIPT: lockouts
-        Parameter: Previous Script Result
+        Parameter: EvaluatorInputJSON
+        Output Type: Dictionary
         -> Evaluation
     GET DICTIONARY VALUE: status from Evaluation
         -> Status
@@ -109,7 +109,7 @@ OTHERWISE
             GET SHORTCUTS: All Shortcuts
                 -> InstalledShortcuts
             GET DICTIONARY VALUE: penalty from OpenResult
-            IF Dictionary Value is true
+            IF Dictionary Value is Yes (Boolean)
                 IF InstalledShortcuts contains Log Screen Time Lock Off
                     RUN SHORTCUT: Log Screen Time Lock Off
                         Input: None

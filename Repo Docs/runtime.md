@@ -1,4 +1,4 @@
-# OpenHabits Runtime 1.2.1
+# OpenHabits Runtime 1.2.2
 
 This checkpoint uses the user's uploaded 1.1.0 script as its baseline, rather
 than the obsolete dictionary-envelope prototype in PR #163. The native action
@@ -16,7 +16,7 @@ on a Calendar Alarms runtime.
 
 Create a Scriptable bookmark named `Shortcuts` pointing to `iCloud Drive/Shortcuts`.
 State paths are under `OpenHabits/OpenHabits Metrics`: `settings.json`,
-`lockouts.json`, `lockoutCache.json`, and the runtime-owned `presetRegistry.json`. The installer writes scripts into
+`lockouts.json`, `lockoutCache.json`, `timerStates.json`, and the runtime-owned `presetRegistry.json`. The installer writes scripts into
 Scriptable Documents, never into that state folder. Runtime calls never wait
 for an iCloud download; unavailable files return a block/error notification.
 
@@ -33,8 +33,9 @@ No JSON envelope, Base64, or `ok` flag is required. Run in App is Off.
 | `["evaluator_input", OpenResult, PresetTitle]` | Serialized JSON `{cache, presetOverride}` for the separate lockouts script; the effective preset includes the persistent deletion hold; titles are escaped safely |
 | `begin_legitimate` | Persist the unlock request; return complete notification text |
 | `begin_penalty` | Persist the unlock request; return complete notification text |
-| `["cache_prepare", Shortcut Input]` | Return URL/secret/clientNow for native POST when fetching; otherwise updatedState is 1 for a changed patch or empty text |
-| `["cache_commit", ServerResponse]` | Validate and save a snapshot; empty dictionary on success or notification on rejection |
+| `["cache_prepare", Shortcut Input]` | Numeric cacheOK plus URL/secret/clientNow for native POST when fetching; otherwise updatedState is 1 for a changed patch or empty text |
+| `["cache_commit", ServerResponse]` | Validate and save a snapshot; cacheOK: 1 on success or cacheOK: 0 plus notification on rejection |
+| `["timer_ack", MetricID, SubmittedSeconds, RecordResponse]` | Validate this metric's write acknowledgement, re-read timerStates.json, and subtract only submitted seconds; acknowledged: 1/0 plus notification when unconfirmed |
 
 The main entry point catches local errors and returns `route: block` plus a
 notification. Native action errors/timeouts can terminate before any result;
@@ -118,12 +119,31 @@ by the native Shortcut, and previously created events are not rewritten.
   including on timezone changes. A throttled change emits no notification yet.
 - Offsets use signed minutes, supporting half-hour and quarter-hour timezones.
 - Patches affect known metric entries, preserve lastUpdated, accept zero/false,
-  skip missing/null/empty values, and write once after all changes.
+  skip missing/null/empty values, and write once after all changes. Explicit Boolean
+  completion also patches the matching reminder entry, even if the value is unchanged.
+  Failed entries cannot patch either value or completion.
 - Native POST sends JSON `key: config_snapshot`, `secret`, and RFC 2822 clientNow.
 - Rejected HTML, malformed JSON, incorrect schemas, or incomplete snapshots do
   not replace the last known cache. Snapshot validation includes config.blocks.
 - Task blocks act before fetching. Recursive task_block evaluation neither
   fetches again nor processes an unlock attempt.
+
+Update Lockout Cache returns its selected prepare/commit Dictionary. Calendar
+Alarms Actions uses numeric `cacheOK` to reject failed refreshes rather than trust
+stale completion. Cache refresh itself does not invoke the Calendar Alarm Engine.
+
+## Timer acknowledgement
+
+The optional `timer_ack` command keeps the rebuilt timer's native action count
+small. Start/stop, optional device actions, and the Insights HTTP request stay native.
+The command accepts a Dictionary or JSON recording response; only `ok: true` and
+this metric's `written`/`late_overwritten` entry without errors authorize clearing.
+Failures leave pending duration untouched. On acknowledgement it reads current
+state and subtracts the submitted seconds, preserving other timers, newly added
+time, the current start timestamp, and fractional seconds not submitted. It does
+not retry recording, fetch cache, or wait for iCloud. Concurrent file writes are
+still not transactional. This timer flow requires Scriptable; plain Insights and
+metric logging remain native.
 
 ## Installation and verification
 
@@ -135,8 +155,8 @@ runtime changes, replace the `main` segment with the test branch in the installe
 both scripts and validates them before writing either. It always replaces valid
 managed files, so rerunning setup updates them. It never
 touches user settings/cache/timer state. The current Insights publication readout
-checks for `Update Lockout Cache`, so Calendar Alarms-only users can install the
-scripts without Locked/Allowed. Logging-only users retain no Scriptable dependency.
+checks for `Update Lockout Cache` or `Toggle Timer Template`, so Calendar Alarms/timer users can install the
+scripts without Locked/Allowed. Renamed timers still require the matching Runtime. Logging-only users retain no Scriptable dependency.
 Apply this native installer edit to shared Shortcut exports before publication;
 the historical Insights transcription retains the earlier Locked condition.
 

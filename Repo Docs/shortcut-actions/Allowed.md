@@ -1,9 +1,7 @@
 # Allowed
 
-Status: runtime-based action readout adapted for publication with an optional
-blocking-app comment. This does not modify installed Shortcut exports. Empty input
-starts an unlock attempt; nonempty input handles an allowed session. This readout
-targets OpenHabits Runtime 1.1.1. Arrows label magic-variable outputs, not extra
+Full action readout, 2026-10-14, for OpenHabits Runtime 1.2.2, with an optional blocking-app comment. The native flow is unchanged. This does not modify installed Shortcut exports. Empty input
+starts an unlock attempt; nonempty input handles an allowed session. Arrows label magic-variable outputs, not extra
 Set Variable actions. All Run Script actions use Run in App: Off.
 
 ```text
@@ -18,7 +16,8 @@ IF Shortcut Input does not have any value
     END MENU
     RUN SCRIPT: OpenHabits Runtime
         Parameter: Menu Result
-    GET DICTIONARY VALUE: notification from Script Result
+        -> UnlockResult (Dictionary)
+    GET DICTIONARY VALUE: notification from UnlockResult
     SHOW NOTIFICATION: Dictionary Value
     STOP THIS SHORTCUT
 END IF

@@ -1,13 +1,8 @@
 # Insights
 
-Status: normalized logging/setup readout from the user, with the proposed
-installer wiring integrated below. The native installer edit is not an editable
-iOS Shortcut export and has not been applied on the user's phone by this PR.
-The logging path is still native, not a new runtime operation. Scriptable remains
-optional for logging alone. Installer wiring now checks for Update Lockout Cache,
-supporting Calendar Alarms integration without requiring Locked or Allowed.
-The original action transcription (trailing whitespace normalized) is preserved alongside this
-readout. Arrows label magic-variable outputs; Set Variable lines are real actions.
+Full replacement action readout, 2026-10-14, including setup, logging, optional cache/Calendar integration, and Notion. The logging path remains native; Scriptable is optional for logging alone. The installer guard checks for Update Lockout Cache or Toggle Timer Template, supporting Calendar Alarms/timers without Locked or Allowed. A renamed timer still needs the matching Runtime installed before use. Updating this file does not update the shared or installed Shortcut. Historical source transcriptions remain provenance.
+
+Arrows label magic-variable outputs; Set Variable lines are real actions. `ok` and `writeToNotion` are **Booleans**. `updateNotion` is a **Number**. Bind all hooks and the final return to the **first** recording response, never the subsequent Notion HTTP result. Keep errors visible when debug is off. Install the companion Calendar Alarms Engine/runtime changes before enabling its hook; forwarded metric responses must select completion-only cleanup.
 
 Run Inline Script below means paste the entire `Inline Scriptable/Insights
 Installer.js` source into that action, not a URL or a filesystem path. Run in App
@@ -28,6 +23,10 @@ IF Shortcut Input does not have any value
         SET VARIABLE: webAppId = Dictionary Value
         SET VARIABLE: fileFound = 1
     OTHERWISE
+        TEXT: [empty]
+        SET VARIABLE: openHabitsSecret = Text
+        TEXT: [empty]
+        SET VARIABLE: webAppId = Text
         SHOW ALERT:
             Welcome to OpenHabits Metrics!
             There are a few simple questions to get set up.
@@ -67,7 +66,9 @@ IF Shortcut Input does not have any value
         Ask Where to Save: Off
         Overwrite If File Exists: On
     GET SHORTCUTS: All Shortcuts
-    IF Shortcuts contains Update Lockout Cache
+    IF ANY ARE TRUE:
+        Shortcuts (Names) contains Update Lockout Cache
+        Shortcuts (Names) contains Toggle Timer Template
         RUN INLINE SCRIPT: Insights Installer
             Parameter: (empty)
     END IF
@@ -99,12 +100,26 @@ GET CONTENTS OF URL: RequestURL
     Method: POST
     Headers: Content-Type = application/json
     Request Body: File = RecordBody
-    -> RecordResponse
-IF RecordResponse does not contain metricsByID
+    -> RecordHTTPResponse
+GET TEXT FROM INPUT: RecordHTTPResponse
+    -> RecordResponseText
+IF RecordResponseText does not contain metricsByID
     SHOW NOTIFICATION:
         Error: unable to access Google Drive at this time. Please try again later.
-        [RecordResponse]
+        [RecordResponseText]
     STOP THIS SHORTCUT
+END IF
+GET DICTIONARY FROM INPUT: RecordHTTPResponse
+    -> RecordResponse (Dictionary)
+GET DICTIONARY VALUE: errors from RecordResponse
+    -> RecordErrors (List)
+IF RecordErrors has any value
+    SHOW NOTIFICATION: RecordErrors
+END IF
+GET DICTIONARY VALUE: ok from RecordResponse
+    -> RecordOK (Boolean)
+IF RecordOK is No
+    STOP AND OUTPUT: RecordResponse
 END IF
 GET SHORTCUTS: All Shortcuts
     -> InstalledShortcuts
@@ -117,10 +132,6 @@ IF InstalledShortcuts contains Calendar Alarm Engine
         Input: RecordResponse
 END IF
 IF debug is true
-    GET DICTIONARY VALUE: errors from RecordResponse
-    IF Dictionary Value has any value
-        SHOW NOTIFICATION: Dictionary Value
-    END IF
     SHOW RESULT: RecordResponse
 END IF
 GET DICTIONARY VALUE: metricsByID from RecordResponse
@@ -144,12 +155,22 @@ IF Messages has any value
 END IF
 SET VARIABLE: updateNotion = 0
 REPEAT WITH EACH ITEM IN Metrics
-    GET DICTIONARY VALUE: writeToNotion from Repeat Item
-    IF Dictionary Value is Yes
-        SET VARIABLE: updateNotion = 1
+    SET VARIABLE: CurrentMetric = Repeat Item (Dictionary)
+    GET DICTIONARY VALUE: status from CurrentMetric
+        -> MetricStatus (Text)
+    GET DICTIONARY VALUE: errors from CurrentMetric
+        -> MetricErrors (List)
+    IF MetricStatus is not error
+        IF MetricErrors does not have any value
+            GET DICTIONARY VALUE: writeToNotion from CurrentMetric
+                -> MetricWriteToNotion (Boolean)
+            IF MetricWriteToNotion is Yes
+                SET VARIABLE: updateNotion = 1
+            END IF
+        END IF
     END IF
 END REPEAT
-IF updateNotion is Yes
+IF updateNotion is 1
     TEXT:
         {
           "key": "update_metric_notion",
@@ -164,7 +185,4 @@ END IF
 STOP AND OUTPUT: RecordResponse
 ```
 
-Logging return is explicitly the first HTTP response. The transcription's last
-`Contents of URL` binding was ambiguous; this prevents a Notion response from
-replacing it. Response-success checks, points formatting, and setup validation
-remain follow-up work recorded in `../runtime-review-notes.md`.
+The first response's `metricsByID` list controls the cache patch, completion cleanup, and Notion eligibility. A top-level failure returns before hooks; individual failed entries cannot request Notion writes. The Notion endpoint still receives the original request tuples and applies server validation. The initial text guard catches the common Google Drive HTML response before Dictionary conversion; unexpected malformed JSON may still stop the native conversion action. No automatic recording retry is added.

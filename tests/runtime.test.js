@@ -7,6 +7,7 @@ const context = vm.createContext({ Date, Intl });
 vm.runInContext(source.replace(/await main\(\);\s*$/, ''), context);
 const now = new Date('2026-10-05T16:00:37.250Z');
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
+const nativeV1 = require('./fixtures/native-shortcut-v1.json');
 const settings = { webAppId: 'test-deployment', openHabitsSecret: 'secret with ?&' };
 function cache(age = 60000, offset = context.offset(now)) {
   return { ok: true, schemaVersion: 'lockouts_cache_v1',
@@ -21,6 +22,75 @@ function storage(files = {}) {
     write(name, value) { this.files[name] = clone(value); this.writes.push(name); } };
 }
 function run(input, s, at = now) { return context.dispatch(input, s, at); }
+
+test('v1 native cache requests preserve legacy updatedState and numeric cacheOK', () => {
+  const c = cache(); c.reminderState = {byID: {a: {complete: false}}};
+  const s = storage({'lockoutCache.json': c, 'settings.json': settings});
+  const patched = run(['cache_prepare', JSON.stringify(nativeV1.metricResponse)], s);
+  assert.equal(patched.updatedState, 1); assert.equal(patched.cacheOK, 1);
+  const request = run(['cache_prepare', 'fetch_new_cache'], s);
+  assert.equal(request.updatedState, ''); assert.equal(request.cacheOK, 0);
+  assert.equal(typeof request.url, 'string'); assert.equal(typeof request.secret, 'string');
+  assert.equal(typeof request.clientNow, 'string');
+  assert.equal(run(['cache_commit', JSON.stringify(cache(0))], s).cacheOK, 1);
+});
+
+test('v1 native timer and evaluator List requests retain their output types', () => {
+  const s = storage({'timerStates.json': {time_working_pendingSeconds: 60}, 'lockoutCache.json': cache()});
+  const result = run(['timer_ack', 'time_working', 60, nativeV1.timerResponse], s);
+  assert.equal(result.acknowledged, 1); assert.equal(result.remainingPending, 0);
+  assert.equal(typeof result.notification, 'string');
+  const evaluated = run(['evaluator_input', {cacheJSON: JSON.stringify(cache())}, 'Today'], s);
+  assert.equal(typeof evaluated, 'string'); assert.equal(JSON.parse(evaluated).presetOverride, 'Today');
+  assert.equal(typeof run('begin_legitimate', s).notification, 'string');
+});
+
+test('timer acknowledgement clears only confirmed submitted seconds from the latest state', () => {
+  for (const status of ['written', 'late_overwritten']) {
+    const s = storage({'timerStates.json': {a_startTime: 'new interval', a_pendingSeconds: 125.5,
+      b_pendingSeconds: 80, b_startTime: 'other timer'}});
+    const response = {ok: true, metricsByID: [{metricID: 'b', status: 'written'}, {metricID: 'a', status, errors: []}]};
+    const r = run(['timer_ack', 'a', 120, JSON.stringify(response)], s);
+    assert.equal(r.acknowledged, 1);
+    assert.equal(r.remainingPending, 5.5);
+    assert.deepEqual(s.files['timerStates.json'], {a_startTime: 'new interval', a_pendingSeconds: 5.5,
+      b_pendingSeconds: 80, b_startTime: 'other timer'});
+    assert.deepEqual(s.reads, ['timerStates.json']);
+    assert.deepEqual(s.writes, ['timerStates.json']);
+  }
+});
+
+test('timer acknowledgement preserves pending duration for failures and unrelated or nonwriting results', () => {
+  for (const response of [undefined, 'Google Drive unavailable', {}, {ok: false, metricsByID: []},
+    {ok: true, metricsByID: [{metricID: 'b', status: 'written'}]},
+    ...['error', 'kept_first', 'late_no_write', 'ignored'].map(status =>
+      ({ok: true, metricsByID: [{metricID: 'a', status}]})),
+    {ok: true, metricsByID: [{metricID: 'a', status: 'written', errors: ['write failed']}]},
+    {ok: true, metricsByID: [{metricID: 'a', status: 'written', errors: 'write failed'}]},
+    {ok: true, metricsByID: [{metricID: 'a', status: 'written', found: false}]}]) {
+    const s = storage({'timerStates.json': {a_pendingSeconds: 120}});
+    const r = run(['timer_ack', 'a', 120, response], s);
+    assert.equal(r.acknowledged, 0);
+    assert.match(r.notification, /kept locally/);
+    assert.deepEqual(s.reads, []);
+    assert.deepEqual(s.writes, []);
+  }
+});
+
+test('timer acknowledgement rejects invalid submitted or pending durations without writing', () => {
+  const response = {ok: true, metricsByID: [{metricID: 'a', status: 'written'}]};
+  for (const seconds of [-1, Infinity, 'bad', '', null, true]) {
+    const s = storage({'timerStates.json': {a_pendingSeconds: 120}});
+    assert.equal(run(['timer_ack', 'a', seconds, response], s).acknowledged, 0);
+    assert.equal(s.writes.length, 0);
+  }
+  for (const state of [{}, {a_pendingSeconds: 'bad'}, {a_pendingSeconds: -1},
+    {a_pendingSeconds: null}, {a_pendingSeconds: ''}, {a_pendingSeconds: false}]) {
+    const s = storage({'timerStates.json': state});
+    assert.equal(run(['timer_ack', 'a', 120, response], s).acknowledged, 0);
+    assert.equal(s.writes.length, 0);
+  }
+});
 
 test('normal app opening returns evaluator cache without initializing a file', () => {
   const s = storage({ 'lockoutCache.json': cache() });
@@ -199,8 +269,55 @@ test('bad HTTP responses preserve previous cache; valid text or dictionary commi
     assert.deepEqual(s.files, before);
     assert.equal(s.writes.length, 0);
   }
-  assert.equal(Object.keys(run(['cache_commit', JSON.stringify(cache(0))], s)).length, 0);
+  assert.equal(run(['cache_commit', JSON.stringify(cache(0))], s).cacheOK, 1);
   assert.equal(s.writes.length, 1);
+});
+
+test('completion patches update reminders even when values are unchanged, without renewing the snapshot', () => {
+  const c = cache();
+  c.generatedAtISO = c.lastUpdated;
+  c.reminderState = {byID: {a: {complete: false, displayName: 'A'}, b: {complete: true}}};
+  const s = storage({'lockoutCache.json': c, 'settings.json': settings});
+  const r = run(['cache_prepare', {ok: true, metricsByID: [
+    {metricID: 'a', value: 1, complete: true, status: 'written'},
+    {metricID: 'b', value: '', complete: false, status: 'written'}
+  ]}], s);
+  assert.equal(r.cacheOK, 1);
+  assert.equal(r.updatedState, 1);
+  assert.equal(s.writes.length, 1);
+  assert.equal(s.files['lockoutCache.json'].reminderState.byID.a.complete, true);
+  assert.equal(s.files['lockoutCache.json'].reminderState.byID.b.complete, false);
+  assert.equal(s.files['lockoutCache.json'].reminderState.byID.a.displayName, 'A');
+  assert.equal(s.files['lockoutCache.json'].generatedAtISO, c.generatedAtISO);
+  assert.equal(s.files['lockoutCache.json'].lastUpdated, c.lastUpdated);
+  assert.equal(run(['cache_prepare', 'fetch_new_cache'], s).url !== undefined, true);
+});
+
+test('failed, unknown, and incomplete response entries cannot corrupt cached completion or values', () => {
+  const c = cache(); c.reminderState = {byID: {a: {complete: true}}};
+  const s = storage({'lockoutCache.json': c});
+  for (const metric of [
+    {metricID: 'a', value: 0, complete: false, status: 'error'},
+    {metricID: 'a', value: 0, complete: false, errors: ['Unable to save']},
+    {metricID: 'a', value: 0, complete: false, errors: 'Unable to save'},
+    {metricID: 'a', value: 0, complete: false, found: false},
+    {metricID: 'unknown', value: 0, complete: true}
+  ]) run(['cache_prepare', {metricsByID: [metric]}], s);
+  assert.equal(s.writes.length, 0);
+  assert.equal(s.files['lockoutCache.json'].reminderState.byID.a.complete, true);
+});
+
+test('refresh status distinguishes throttled current caches, requests, failures and commits', () => {
+  const s = storage({'lockoutCache.json': cache(5000), 'settings.json': settings});
+  assert.equal(run(['cache_prepare', 'fetch_new_cache'], s).cacheOK, 1);
+  s.files['lockoutCache.json'] = cache(5000, '+0530');
+  assert.equal(run(['cache_prepare', 'fetch_new_cache'], s).cacheOK, 0);
+  s.files['lockoutCache.json'] = cache(60000);
+  assert.equal(run(['cache_prepare', 'fetch_new_cache'], s).cacheOK, 0);
+  const before = clone(s.files);
+  assert.equal(run(['cache_commit', {ok: false, metricsByID: []}], s).cacheOK, 0);
+  assert.deepEqual(s.files, before);
+  assert.equal(run(['cache_commit', cache(0)], s).cacheOK, 1);
 });
 
 test('corrupt state, missing settings, and unsupported old envelopes reject without mutation', () => {
