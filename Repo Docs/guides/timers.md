@@ -15,3 +15,5 @@ For screen time, name the configured timer **Toggle Screen Time Timer**. Make **
 Timer state lives at `iCloud Drive/Shortcuts/OpenHabits/OpenHabits Metrics/timerStates.json`. Avoid operating the same timer simultaneously from two devices. If submission fails, check the Sheet before retrying an additive duration, since the server may already have received it.
 
 [Developer review notes](../runtime-review-notes.md#toggle-timer) record outstanding recovery issues in the historical timer transcription. Shared native shortcuts still need verification before publication.
+
+When rebuilding the current template, store start timestamps in **RFC 2822**, keep the stopped-state sentinel as the literal Text `null`, and use the [current timer readout](../shortcut-actions/Toggle%20Timer%20Template.md). ISO numeric-offset parsing in Get Dates from Input produced incorrect durations in native tests. A short on-device duration write and acknowledgement passed after this correction; simultaneous runs and uncertain-response retries remain limitations.

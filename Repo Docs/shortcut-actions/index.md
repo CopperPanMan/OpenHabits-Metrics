@@ -1,6 +1,6 @@
 # Metrics Shortcut readouts
 
-Complete manual action flows updated 2026-10-14 for OpenHabits Runtime 1.2.2 and the current server contracts. They incorporate the shared-Shortcut audit and the agreed native fixes. Replace the corresponding action flows using these readouts; Git history retains the older versions. These describe corrected target flows, rather than a verbatim dump of existing buggy exports. Updating documentation does not change shared iCloud links or installed Shortcuts, and the rebuilt flows need device verification.
+Complete manual action flows updated 2026-10-19 for OpenHabits Runtime 1.2.2 and the current server contracts. They incorporate the shared-Shortcut audit and the agreed native fixes. Replace the corresponding action flows using these readouts; Git history retains the older versions. These describe corrected target flows, rather than a verbatim dump of existing buggy exports. Updating documentation does not change shared iCloud links or installed Shortcuts. The reconstructed flows have partial native/iPhone verification; the notes below distinguish what was tested.
 
 | Shortcut | Full readout |
 | --- | --- |
@@ -17,6 +17,10 @@ Insights logging and timer start/stop remain native. The rebuilt timer uses one 
 
 The original handwritten transcriptions and legacy installer remain in `source-transcriptions/` for provenance. They can contain omissions or superseded behavior; use the full readouts above to rebuild. Current sharing links are on [Downloads](../downloads.md). Optional app, wallpaper, calendar, and Focus actions should be customized on the device.
 
-Prefer short native flows when choosing between equivalent designs, including moving parsing/state work into the existing Runtime. These readouts are proposed rebuilds; they are not a claim that all helper flows have already been adopted on-device. Keep working native behavior when a minor action-count reduction would require disproportionate rebuilding. The timer's acknowledgement/state update uses one helper call; device actions and HTTP stay native.
+Prefer short native flows when choosing between equivalent designs, including moving parsing/state work into the existing Runtime. These readouts reflect the six rebuilt core shortcuts; personalized loggers and timers are outside this update. Keep working native behavior when a minor action-count reduction would require disproportionate rebuilding. The timer's acknowledgement/state update uses one helper call; device actions and HTTP stay native.
 
 The [native interface v1](../native-shortcut-interface.md) records the commands, types, and compatibility rules to preserve across future script releases. Saved native-request fixtures exercise these calls so code changes do not silently require another native rebuild.
+
+Native rebuild conventions: after a Scriptable call expected to return a Dictionary, explicitly use **Get Dictionary from Input** on its output and bind subsequent actions to that Dictionary. Text guards marked `[blank]` mean **is / is not** with a truly empty comparison field, after Text coercion; collection/file presence and numeric/Boolean comparisons retain their own types. This avoids blank notification banners from missing dictionary fields. Device-only actions and personal app/calendar/Focus/wallpaper choices must be selected on iPhone. The manual flows omit device identifiers and personal selections.
+
+Rebuild verification (October 2026): cache refresh returned `cacheOK = 1` without a blank notification; timestamp and numeric replacement writes succeeded; a duration timer added the expected short interval and passed acknowledgement/repeated start-stop checks. Lockout routes, all optional device actions, and every logging type have not all received disposable end-to-end tests. Runtime and lockouts sources already match this repository and are unchanged by the readout update. Published download links are unchanged.

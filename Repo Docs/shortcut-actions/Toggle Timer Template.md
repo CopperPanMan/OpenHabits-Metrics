@@ -1,6 +1,6 @@
 # Toggle Timer Template
 
-Full replacement action readout, 2026-10-14, based on the audited shared template, with the recording acknowledgement fix. It includes initialization, native start/stop behavior, durable pending time, optional actions, and submission to Insights. Updating this file does not update the shared or installed Shortcut. Native start/stop and HTTP recording are retained. One `timer_ack` call to OpenHabits Runtime 1.2.2 validates the response and clears only confirmed pending time, avoiding a long native acknowledgement ladder. Install the matching Runtime and its Shortcuts bookmark before rebuilding this timer.
+Full replacement action readout, 2026-10-19, based on the audited shared template, with the recording acknowledgement fix. It includes initialization, native start/stop behavior, durable pending time, optional actions, and submission to Insights. Updating this file does not update the shared or installed Shortcut. Native start/stop and HTTP recording are retained. One `timer_ack` call to OpenHabits Runtime 1.2.2 validates the response and clears only confirmed pending time, avoiding a long native acknowledgement ladder. Install the matching Runtime and its Shortcuts bookmark before rebuilding this timer.
 
 Arrows name magic variables; Set Variable lines are real actions. Use Number values for state flags and pending seconds. File paths below are relative to the Shortcuts folder. Save File always has Ask Where to Save Off and Overwrite On. Bind every Set Dictionary Value to the preceding updated Dictionary; do not repeatedly bind to the original file.
 
@@ -45,7 +45,9 @@ GET DICTIONARY VALUE: [MetricID]_startTime from State
     -> StartTime (Text)
 NUMBER: 0
 SET VARIABLE: TimerRunning = Number
-IF StartTime has any value
+TEXT: [StartTime]
+    -> StartTimeText
+IF StartTimeText is not [blank]
     IF StartTime is not null (the literal Text "null")
         NUMBER: 1
         SET VARIABLE: TimerRunning = Number
@@ -81,7 +83,7 @@ IF TimerRunning is 1
     SET DICTIONARY VALUE:
         Dictionary: StateWithPending
         Key: [MetricID]_startTime
-        Value: null (literal Text, not a magic variable)
+        Value: null (literal Text, not an empty field or a magic variable)
         -> StoppedState
     SAVE FILE: StoppedState
         Folder: Shortcuts
@@ -95,7 +97,7 @@ IF TimerRunning is 1
         Optional calendar event block. Delete this If and its contents if
         unwanted; otherwise choose your calendar in Add New Event below.
         Pending duration is already saved before any optional UI/network work.
-    IF StartTimeDate is not in the last 5 minutes
+    IF ElapsedSeconds is greater than 300
         ASK FOR INPUT: Text
             Prompt: Task worked on:
             -> TaskTitle
@@ -112,8 +114,7 @@ OTHERWISE
     END IF
     FORMAT DATE:
         Input: Now
-        Format: ISO 8601
-        Include Time: On
+        Format: RFC 2822
         -> StartTimestamp (Text)
     SET DICTIONARY VALUE:
         Dictionary: State
@@ -178,11 +179,15 @@ OTHERWISE
         -> Acknowledgement (Dictionary)
     GET DICTIONARY VALUE: notification from Acknowledgement
         -> AcknowledgeNotification (Text)
-    IF AcknowledgeNotification has any value
-        SHOW NOTIFICATION: AcknowledgeNotification
+    TEXT: [AcknowledgeNotification]
+        -> AcknowledgeNotificationText
+    IF AcknowledgeNotificationText is not [blank]
+        SHOW NOTIFICATION: AcknowledgeNotificationText
     END IF
 END IF
 STOP THIS SHORTCUT
 ```
 
 The runtime performs acknowledgement and the state update in one call. A response containing the word `metricsByID` is insufficient acknowledgement. Only a successful response with this metric's `written` or `late_overwritten` entry and no entry errors clears the submitted amount. Re-read state before clearing it, preserving other metrics and any newly accumulated pending seconds. Fractional seconds that were not submitted remain pending. The acknowledgement fix requires the updated Insights readout to return the first recording response.
+
+Native date compatibility: store `startTime` as RFC 2822, matching the original timer. On the tested system, Get Dates from Input misread ISO numeric offsets and seconds, inflating elapsed durations. An empty Set Dictionary Value is invalid: stopping stores the literal Text `null`. A native duration test confirmed a 16-second write, acknowledged pending time, repeated-start/stop protection, and preservation of unrelated timer states. This does not establish safety for simultaneous runs or automatic retries after an uncertain server response.
