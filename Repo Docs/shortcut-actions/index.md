@@ -6,7 +6,7 @@ Complete manual action flows updated 2026-10-19 for OpenHabits Runtime 1.2.2 and
 | --- | --- |
 | Insights | [Setup, logging, cache/Calendar hooks, and Notion](Insights.md) |
 | Update Lockout Cache | [Prepare, native HTTP, commit, and status return](Update%20Lockout%20Cache.md) |
-| Toggle Timer Template | [Initialization, start/stop, pending duration, optional actions, and acknowledgement](Toggle%20Timer%20Template.md) |
+| Toggle Timer Template | [Initialization, start/stop, start_overwrite, pending duration, acknowledgement, and screen-time helpers](Toggle%20Timer%20Template.md) |
 | Metric(s) Logger Template | [Native logging demo](Metric%28s%29%20Logger%20Template.md) |
 | Locked | [Runtime evaluation, preset Title, and blocking/allow flows](Locked.md) |
 | Allowed | [Unlock selection and allowed-session handling](Allowed.md) |

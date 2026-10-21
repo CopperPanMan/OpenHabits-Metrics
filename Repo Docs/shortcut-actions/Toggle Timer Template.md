@@ -6,12 +6,17 @@ Arrows name magic variables; Set Variable lines are real actions. Use Number val
 
 The configured metric Text identifies one duration metric. Use additive recording if sessions should accumulate. Explicit `start` while running and `stop` while stopped do nothing, as in the shared template. A failed or unconfirmed submission keeps pending seconds; another start/stop cycle can submit them with the next interval. Check the Sheet first because a timed-out request may already have written. Simultaneous runs/devices can still race file writes; this flow does not add transactions or automatic retries.
 
+Input `start_overwrite` always starts a fresh interval at Now, including when the timer is already running. It discards the active interval without submitting it, running stop actions, or creating its calendar event. It preserves already completed pending seconds, other timers, and previously recorded Sheet values. This trades the discarded interval for recovery after a missed stop. Use it only at a known new session boundary; use ordinary `start` for repeated commands that must preserve an active session. No Runtime or server update is needed for this input.
+
 ```text
 COMMENT:
     Run once to start timing and again to stop and add elapsed time to
     Time Working. Starting alone does not write a duration to the Sheet.
     Duplicate this template for another duration metric and replace its ID.
     Input "start" or "stop" requests that operation instead of toggling.
+    Input "start_overwrite" starts fresh, discarding any active interval.
+    Completed pending seconds are kept. Ordinary "start" stays a no-op
+    while running, so repeated start commands remain safe.
     Choose optional calendar, Focus, wallpaper, and timer actions below.
 TEXT: [["time_working"]]
     -> ConfiguredMetric
@@ -62,7 +67,9 @@ OTHERWISE
     SET VARIABLE: PendingSeconds = Number
 END IF
 
-IF TimerRunning is 1
+IF All are true:
+    TimerRunning is 1
+    Shortcut Input is not start_overwrite (Text comparison)
     IF Shortcut Input is start
         STOP THIS SHORTCUT
     END IF
@@ -188,6 +195,37 @@ END IF
 STOP THIS SHORTCUT
 ```
 
+The main running branch uses **All**, not **Any**. Set that condition's Shortcut Input variable type to **Text** so the `is not start_overwrite` comparison is available. When this input is received, the existing Otherwise branch replaces the start timestamp and preserves pending seconds. For an older timer such as **Screen Time Timer** that tests `startTime` directly, keep its existing running-state checks and add `Shortcut Input is not start_overwrite` to the same **All** condition.
+
 The runtime performs acknowledgement and the state update in one call. A response containing the word `metricsByID` is insufficient acknowledgement. Only a successful response with this metric's `written` or `late_overwritten` entry and no entry errors clears the submitted amount. Re-read state before clearing it, preserving other metrics and any newly accumulated pending seconds. Fractional seconds that were not submitted remain pending. The acknowledgement fix requires the updated Insights readout to return the first recording response.
 
-Native date compatibility: store `startTime` as RFC 2822, matching the original timer. On the tested system, Get Dates from Input misread ISO numeric offsets and seconds, inflating elapsed durations. An empty Set Dictionary Value is invalid: stopping stores the literal Text `null`. A native duration test confirmed a 16-second write, acknowledged pending time, repeated-start/stop protection, and preservation of unrelated timer states. This does not establish safety for simultaneous runs or automatic retries after an uncertain server response.
+## Screen-time helper readouts
+
+Duplicate the timer as **Toggle Screen Time Timer** and set its configured metric to your screen-time duration/add metric, for example `[["screen_time"]]`. Customize its optional device actions for screen-time use. If your existing copy is named **Screen Time Timer**, select that name instead in both Run Shortcut actions below.
+
+**Start Screen Time Timer**, called at a new allowed app session:
+
+```text
+TEXT: start_overwrite
+RUN SHORTCUT: Toggle Screen Time Timer
+    Input: Text
+```
+
+**Stop Screen Time Timer**, called by the protected-app close automation:
+
+```text
+TEXT: stop
+RUN SHORTCUT: Toggle Screen Time Timer
+    Input: Text
+```
+
+The start helper intentionally abandons an unfinished interval from a missed stop. Keep ordinary `start` in callers that may repeatedly start the same active session. See [screen-time setup](../guides/ios-lockouts.md#add-a-screen-time-allowance) for Allowed and temporary-unlock wiring. Updating the readout does not update installed Shortcuts or shared iCloud links.
+
+## Verify on the device
+
+- Start a timer, wait briefly, and send ordinary `start` again. The saved start timestamp must stay unchanged.
+- Simulate a missed stop: leave the timer running, then send `start_overwrite`. Its start timestamp must become the current time, with no duration submitted and no stop actions or calendar event. Stop after a short measured interval; only time since the overwrite, plus any existing completed pending seconds, should be submitted.
+- Try `start_overwrite` while stopped and with no state file. Both should start normally. Confirm another timer's state remains unchanged.
+- With completed pending seconds present, send `start_overwrite` and confirm they survive. Verify ordinary toggle and repeated `stop` behavior as before.
+
+These are manual Shortcut checks; the installed/shared iCloud Shortcut must be edited and verified separately.
