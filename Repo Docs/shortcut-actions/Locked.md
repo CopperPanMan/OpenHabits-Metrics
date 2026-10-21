@@ -1,6 +1,6 @@
 # Locked
 
-Full action readout, 2026-10-15, for OpenHabits Runtime 1.2.2 and lockouts.js. It includes the audited `shortcut.name` binding and explicit preset Title extraction. Blocking-app actions remain optional comments to customize. Updating this file does not update installed or shared Shortcut exports. Expected-preset tracking is handled by the runtime behind the existing calls.
+Full action readout, 2026-10-19, for OpenHabits Runtime 1.2.2 and lockouts.js. It includes the audited `shortcut.name` binding and explicit preset Title extraction. Blocking-app actions remain optional comments to customize. Updating this file does not update installed or shared Shortcut exports. Expected-preset tracking is handled by the runtime behind the existing calls.
 Arrows label magic-variable outputs. All Run Script actions use Run in App: Off.
 The ending calendar alarm uses `calendarEnd` directly, with zero offset; do not
 subtract another minute in the event notes or native actions.
@@ -55,7 +55,7 @@ IF Route is evaluate
                 -> BlockShortcut
             GET DICTIONARY VALUE: name from BlockShortcut
                 -> ShortcutName
-            IF ShortcutName has any value
+            IF ShortcutName is not [blank]
                 GET DICTIONARY VALUE: input from BlockShortcut
                     -> BlockShortcutInput
                 RUN SHORTCUT: ShortcutName
@@ -84,7 +84,7 @@ IF Route is evaluate
                 -> UI
             GET DICTIONARY VALUE: message from UI
                 -> AllowedMessage
-            IF AllowedMessage has any value
+            IF AllowedMessage is not [blank]
                 TEXT: [AllowedMessage]
             OTHERWISE
                 TEXT: Apps are allowed.
@@ -105,7 +105,7 @@ OTHERWISE
         COMMENT: Optional — stop the blocking session in the blocking app of your choice.
         GET DICTIONARY VALUE: calendarEnd from OpenResult
             -> CalendarEnd
-        IF CalendarEnd has any value
+        IF CalendarEnd is not [blank]
             GET SHORTCUTS: All Shortcuts
                 -> InstalledShortcuts
             GET DICTIONARY VALUE: penalty from OpenResult

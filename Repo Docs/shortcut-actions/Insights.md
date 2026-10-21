@@ -1,6 +1,6 @@
 # Insights
 
-Full replacement action readout, 2026-10-14, including setup, logging, optional cache/Calendar integration, and Notion. The logging path remains native; Scriptable is optional for logging alone. The installer guard checks for Update Lockout Cache or Toggle Timer Template, supporting Calendar Alarms/timers without Locked or Allowed. A renamed timer still needs the matching Runtime installed before use. Updating this file does not update the shared or installed Shortcut. Historical source transcriptions remain provenance.
+Full replacement action readout, 2026-10-19, including setup, logging, optional cache/Calendar integration, and Notion. The logging path remains native; Scriptable is optional for logging alone. The installer guard checks for Update Lockout Cache or Toggle Timer Template, supporting Calendar Alarms/timers without Locked or Allowed. A renamed timer still needs the matching Runtime installed before use. Updating this file does not update the shared or installed Shortcut. Historical source transcriptions remain provenance.
 
 Arrows label magic-variable outputs; Set Variable lines are real actions. `ok` and `writeToNotion` are **Booleans**. `updateNotion` is a **Number**. Bind all hooks and the final return to the **first** recording response, never the subsequent Notion HTTP result. Keep errors visible when debug is off. Install the companion Calendar Alarms Engine/runtime changes before enabling its hook; forwarded metric responses must select completion-only cleanup.
 

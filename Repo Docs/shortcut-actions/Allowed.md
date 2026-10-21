@@ -1,6 +1,6 @@
 # Allowed
 
-Full action readout, 2026-10-14, for OpenHabits Runtime 1.2.2, with an optional blocking-app comment. The native flow is unchanged. This does not modify installed Shortcut exports. Empty input
+Full action readout, 2026-10-19, for OpenHabits Runtime 1.2.2, with an optional blocking-app comment. The native flow is unchanged. This does not modify installed Shortcut exports. Empty input
 starts an unlock attempt; nonempty input handles an allowed session. Arrows label magic-variable outputs, not extra
 Set Variable actions. All Run Script actions use Run in App: Off.
 

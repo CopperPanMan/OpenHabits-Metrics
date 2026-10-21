@@ -1,6 +1,6 @@
 # Toggle Timer Template
 
-Full replacement action readout, 2026-10-21, based on the audited shared template, with the recording acknowledgement fix and an opt-in `start_overwrite` input. It includes initialization, native start/stop behavior, durable pending time, optional actions, and submission to Insights. Updating this file does not update the shared or installed Shortcut. Native start/stop and HTTP recording are retained. One `timer_ack` call to OpenHabits Runtime 1.2.2 validates the response and clears only confirmed pending time, avoiding a long native acknowledgement ladder. Install the matching Runtime and its Shortcuts bookmark before rebuilding this timer.
+Full replacement action readout, 2026-10-19, based on the audited shared template, with the recording acknowledgement fix. It includes initialization, native start/stop behavior, durable pending time, optional actions, and submission to Insights. Updating this file does not update the shared or installed Shortcut. Native start/stop and HTTP recording are retained. One `timer_ack` call to OpenHabits Runtime 1.2.2 validates the response and clears only confirmed pending time, avoiding a long native acknowledgement ladder. Install the matching Runtime and its Shortcuts bookmark before rebuilding this timer.
 
 Arrows name magic variables; Set Variable lines are real actions. Use Number values for state flags and pending seconds. File paths below are relative to the Shortcuts folder. Save File always has Ask Where to Save Off and Overwrite On. Bind every Set Dictionary Value to the preceding updated Dictionary; do not repeatedly bind to the original file.
 
@@ -50,7 +50,9 @@ GET DICTIONARY VALUE: [MetricID]_startTime from State
     -> StartTime (Text)
 NUMBER: 0
 SET VARIABLE: TimerRunning = Number
-IF StartTime has any value
+TEXT: [StartTime]
+    -> StartTimeText
+IF StartTimeText is not [blank]
     IF StartTime is not null (the literal Text "null")
         NUMBER: 1
         SET VARIABLE: TimerRunning = Number
@@ -88,7 +90,7 @@ IF All are true:
     SET DICTIONARY VALUE:
         Dictionary: StateWithPending
         Key: [MetricID]_startTime
-        Value: null (literal Text, not a magic variable)
+        Value: null (literal Text, not an empty field or a magic variable)
         -> StoppedState
     SAVE FILE: StoppedState
         Folder: Shortcuts
@@ -102,7 +104,7 @@ IF All are true:
         Optional calendar event block. Delete this If and its contents if
         unwanted; otherwise choose your calendar in Add New Event below.
         Pending duration is already saved before any optional UI/network work.
-    IF StartTimeDate is not in the last 5 minutes
+    IF ElapsedSeconds is greater than 300
         ASK FOR INPUT: Text
             Prompt: Task worked on:
             -> TaskTitle
@@ -119,8 +121,7 @@ OTHERWISE
     END IF
     FORMAT DATE:
         Input: Now
-        Format: ISO 8601
-        Include Time: On
+        Format: RFC 2822
         -> StartTimestamp (Text)
     SET DICTIONARY VALUE:
         Dictionary: State
@@ -185,8 +186,10 @@ OTHERWISE
         -> Acknowledgement (Dictionary)
     GET DICTIONARY VALUE: notification from Acknowledgement
         -> AcknowledgeNotification (Text)
-    IF AcknowledgeNotification has any value
-        SHOW NOTIFICATION: AcknowledgeNotification
+    TEXT: [AcknowledgeNotification]
+        -> AcknowledgeNotificationText
+    IF AcknowledgeNotificationText is not [blank]
+        SHOW NOTIFICATION: AcknowledgeNotificationText
     END IF
 END IF
 STOP THIS SHORTCUT
