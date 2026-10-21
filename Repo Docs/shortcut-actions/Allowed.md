@@ -4,6 +4,8 @@ Full action readout, 2026-10-14, for OpenHabits Runtime 1.2.2, with an optional 
 starts an unlock attempt; nonempty input handles an allowed session. Arrows label magic-variable outputs, not extra
 Set Variable actions. All Run Script actions use Run in App: Off.
 
+For screen-time tracking, the **Start Screen Time Timer** helper below should call the updated timer with `start_overwrite` when this is a new allowed app session. Allowed itself passes no input to that helper; the helper supplies the timer command. Add support to the timer before changing the helper's input. See the [start/stop helper readouts](Toggle%20Timer%20Template.md#screen-time-helper-readouts). Keep ordinary `start` in callers that may repeat during the same active session.
+
 ```text
 IF Shortcut Input does not have any value
     CHOOSE FROM MENU: Choose Unlock Type
