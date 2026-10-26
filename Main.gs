@@ -1468,6 +1468,13 @@ function recordMetricBySource_(rawData, options) {
     syncNotionForRecordedMetrics_(results, sourceOptions, messages, errors, warnings, trackingSheet);
   }
 
+  // Completion describes the physical tracking day that was read/written.
+  // Floating metric timezone settings affect due-by checks, not activeCol.
+  // Keep this optional metadata out of Notion-only updates and failed batches.
+  var hasSuccessfulRecord = writeToSheet && results.some(function (entry) {
+    return entry && entry.status !== 'error' && typeof entry.complete === 'boolean' &&
+      Array.isArray(entry.errors) && entry.errors.length === 0;
+  });
   return buildHabitsV2Response({
     ok: true,
     messages: messages,
@@ -1475,9 +1482,40 @@ function recordMetricBySource_(rawData, options) {
     pointsDelta: totalPointsDelta,
     todayPoints: todayPoints,
     cumulativePoints: cumulativePoints,
+    completionScope: hasSuccessfulRecord ? buildRecordingCompletionScope_() : undefined,
     errors: errors,
     warnings: warnings
   });
+}
+
+/**
+ * Optional alarm-consumer metadata. The window is [start, end), using the
+ * same script timezone and late extension that selected activeCol. evaluatedAt
+ * is server time, never the caller's supplied clock. No sheet reads or writes.
+ */
+function buildRecordingCompletionScope_() {
+  var now = currentTimeStamp;
+  var timezone = Session.getScriptTimeZone();
+  var scope = { evaluatedAtISO: now.toISOString(), timezone: timezone };
+  try {
+    // Main-only integrations retain a bounded evaluation timestamp. A normal
+    // deployment includes Lockouts.gs, which also owns the cache day windows.
+    if (typeof lockouts_buildEffectiveDayWindow_ !== 'function') return scope;
+    var extensionHours = lateExtensionHours !== undefined ? lateExtensionHours : lateExtension;
+    var dayKey = getEffectiveDayKey_(now, extensionHours);
+    var window = lockouts_buildEffectiveDayWindow_(dayKey, extensionHours, timezone, null);
+    var start = window.start.getTime();
+    var end = window.end.getTime();
+    if (isFinite(start) && isFinite(end) && end > start && end - start <= 48 * 60 * 60 * 1000 &&
+        now.getTime() >= start && now.getTime() < end) {
+      scope.windowStartISO = window.start.toISOString();
+      scope.windowEndISO = window.end.toISOString();
+    }
+  } catch (_) {
+    // Optional metadata must not turn a confirmed write into a failed response.
+    // Consumers can use evaluatedAtISO conservatively when no window is present.
+  }
+  return scope;
 }
 
 function shouldWriteMetricToNotion_(setting) {
@@ -3360,6 +3398,7 @@ function buildHabitsV2Response(response) {
     metricsByID: Array.isArray(payload.metricsByID)
       ? payload.metricsByID
       : (Array.isArray(payload.results) ? payload.results : []),
+    completionScope: payload.completionScope,
     pointsDelta: payload.pointsDelta,
     todayPoints: payload.todayPoints,
     cumulativePoints: payload.cumulativePoints,

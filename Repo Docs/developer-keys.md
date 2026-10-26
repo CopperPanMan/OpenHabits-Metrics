@@ -42,6 +42,10 @@ curl -L "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec" \
 
 Recording responses contain `ok`, `messages`, an **array** named `metricsByID`, `errors`, `warnings`, and point totals (`pointsDelta`, `todayPoints`, `cumulativePoints`). Match each entry by its `metricID` and inspect its `status`/errors. Top-level `ok: true` can include failures for individual metrics. Successful statuses include `written` and `kept_first`; due-by and skipped conditions have their own statuses. Do not treat the presence of `metricsByID` as acknowledgement.
 
+Successful recording batches also include optional `completionScope` metadata for Calendar Alarms consumers. `evaluatedAtISO` is the server evaluation time and `timezone` is the Apps Script timezone. When the normal `Lockouts.gs` day-boundary helpers are available, `windowStartISO` and `windowEndISO` identify the effective tracking day, including `lateExtensionHours`; the start is inclusive and the end is exclusive. These bounds follow the actual Sheet column used for recording, even when a floating metric uses a different client timezone for due-by checks. This permits early completion of an alarm later in that same effective day and completion after midnight before the late-extension boundary, without applying the result to a future day's occurrence.
+
+Consumers must still check each metric's completion, status, and errors, and reject stale evaluation timestamps. Scope is omitted for failed batches and Notion-only updates. Main-only integrations may receive `{evaluatedAtISO, timezone}` without explicit bounds and should use it conservatively. Existing clients may ignore this additional response field; no new request fields or credentials are required.
+
 A request can partially succeed. There is no recording idempotency key: retrying an additive entry after an ambiguous timeout may count it twice. Verify state before retrying.
 
 `current_metric_status` returns `[true,false,...]` on success rather than a recording response object. Numeric zero is complete; numeric targets are not evaluated by this endpoint.
