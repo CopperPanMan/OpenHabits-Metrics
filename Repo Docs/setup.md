@@ -8,7 +8,7 @@ You need a Google account and an iPhone with Apple Shortcuts. Scriptable is also
 
 ## 1. Copy the starter Sheet
 
-**Starter Google Sheet — copy link pending publication.** Make your own copy when the shared Sheet is available. It includes the bound Apps Script and these metrics, matching the preloaded templates:
+**[Copy the starter Google Sheet](https://docs.google.com/spreadsheets/d/1SRYOKMYJ4OeGeBFTM5nKGgrCIm3cNWomRiujVyGoV_o/copy)** to create your own copy. It includes the bound Apps Script and these metrics, matching the preloaded templates:
 
 | Metric | What the demo records |
 | --- | --- |
@@ -19,7 +19,7 @@ You need a Google account and an iPhone with Apple Shortcuts. Scriptable is also
 The **Tracking Data** tab holds your history. **OpenHabits → Open OpenHabits** opens its settings panel.
 
 <details>
-<summary>Install the Sheet manually before its copy link is published</summary>
+<summary>Install the Sheet manually (alternative)</summary>
 
 1. Create a Google Sheet. Open **Extensions → Apps Script**.
 2. Create script files and paste [Main.gs](../Main.gs), [Config.gs](../Config.gs), [Lockouts.gs](../Lockouts.gs), and [SetupV2.gs](../SetupV2.gs).
@@ -27,7 +27,7 @@ The **Tracking Data** tab holds your history. **OpenHabits → Open OpenHabits**
 4. Save, run **openHabitsShowLauncher** once, authorize it, and reload the Sheet.
 5. In the OpenHabits panel, choose [starter-config.json](../Examples/starter-config.json) under **Or choose a configuration backup**, then **Save and Apply**.
 
-The JSON configures the Sheet. The shared starter Sheet itself will be distributed through a Google Sheets copy link.
+The JSON configures the Sheet with the same starter metrics as the shared template.
 
 </details>
 
