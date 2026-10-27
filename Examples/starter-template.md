@@ -4,7 +4,9 @@ Users receive a **Google Sheets copy link**, not a spreadsheet document in Git. 
 
 ## Assemble the Sheet
 
-1. Create a fresh template Sheet while signed in to the **Sierra Mille account** that will own/share it. Follow the [manual installation](../Repo%20Docs/setup.md#1-copy-the-starter-sheet) to add the four script files and two HTML files; import the starter JSON and **Save and Apply**.
+The published starter is temporarily owned by the maintainer’s personal Google account. Transfer ownership to a neutral Sierra Mille account when available, keeping the existing Sheet and copy link.
+
+1. Create a fresh template Sheet while signed in to the **maintainer account** that will own/share it (prefer a neutral Sierra Mille account). Follow the [manual installation](../Repo%20Docs/setup.md#1-copy-the-starter-sheet) to add the four script files and two HTML files; import the starter JSON and **Save and Apply**.
 2. Confirm Tracking Data contains the nine IDs below. Blocking and Notion are disabled; users add their own rules after the demos.
 3. Test on a private copy with a new secret/deployment. Keep the public template's rows and headers but clear demo recordings from column C onward.
 4. Check current and previous configurations in **_OpenHabits Config** contain only starter settings. Remove personal IDs, API tokens, secrets, deployments, and installed triggers from the public template's bound project. Users create their own credentials/deployment and optional streak trigger after copying.
@@ -40,6 +42,6 @@ Use the [Insights installer readout](../Repo%20Docs/shortcut-actions/Insights.md
 
 ## Publish and verify
 
-Share the Sheet view-only by link from the Sierra Mille account. Add its `/copy` link to **Copy the starter Sheet** in [Setup](../Repo%20Docs/setup.md#1-copy-the-starter-sheet), and put the six final iCloud links in each version toggle under **Install the phone shortcuts**. Downloads is only a pointer to that page, so it does not need a second set of links.
+Share the Sheet view-only by link from its current owner account. Add its `/copy` link to **Copy the starter Sheet** in [Setup](../Repo%20Docs/setup.md#1-copy-the-starter-sheet), and put the six final iCloud links in each version toggle under **Install the phone shortcuts**. Downloads is only a pointer to that page, so it does not need a second set of links.
 
 Open the public Sheet signed out to check the owner identity. From another account, copy it and follow setup: authorize, deploy with a new secret, log both water metrics twice, and complete two work sessions. Verify app protection through both blocked and allowed outcomes, test both temporary unlock types, and test Calendar Alarms-only setup with Update Lockout Cache but no Locked/Allowed. Approve permissions unlocked and test each published iOS version before replacing the placeholders.
