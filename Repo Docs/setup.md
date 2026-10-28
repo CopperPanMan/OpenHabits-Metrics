@@ -52,17 +52,17 @@ Each shortcut contains **Comment blocks with instructions**. Open it in the Shor
 
 | Shortcut & install link | What it does and why you need it |
 | --- | --- |
-| **[Insights](https://www.icloud.com/shortcuts/732362ad21c64aa3b33af262654b1d0e)** | Connects your loggers to the Sheet and displays feedback. Used by both templates. |
-| **[Metric(s) Logger Template](https://www.icloud.com/shortcuts/bf26ab9d8ddc420c983484a2ea8a9c89)** | Records one or more metrics. Comes ready for the water demo; duplicate it later for your own loggers. |
-| **[Toggle Timer Template](https://www.icloud.com/shortcuts/6665fbe068a4437ea515ea1192f99f3b)** | Starts/stops a timer and records elapsed time. Used for the timer demo; keep it for anything you want to time. |
+| **[Insights](https://www.icloud.com/shortcuts/0934f080c7084c0d8ad883d202652216)** | Connects your loggers to the Sheet and displays feedback. Used by both templates. |
+| **[Metric(s) Logger Template](https://www.icloud.com/shortcuts/bca83c9f1d3340f38094778cfca093dc)** | Records one or more metrics. Comes ready for the water demo; duplicate it later for your own loggers. |
+| **[Toggle Timer Template](https://www.icloud.com/shortcuts/84c489c9e49b4721a8cf4346517aa654)** | Starts/stops a timer and records elapsed time. Used for the timer demo; keep it for anything you want to time. |
 
 **Also using iOS app protection?** Install all three below. For Calendar Alarms integration alone, install **Update Lockout Cache**; you do not need Locked or Allowed.
 
 | Shortcut & install link | What it does and why you need it |
 | --- | --- |
-| **[Locked](https://www.icloud.com/shortcuts/2b4972e1920c40508bc03fb13b718f60)** | Checks your rules when a protected app opens and redirects you when blocked. NOTE: *You will need to set an automation to run this whenever a protected app is opened (you choose the apps). Further instructions can be found inside the shortcut.*|
-| **[Allowed](https://www.icloud.com/shortcuts/9ff62254e42946f68a1a2ca518da5d62)** | Handles allowed access and lets you request a temporary unlock. *Further instructions can be found inside the shortcut.*|
-| **[Update Lockout Cache](https://www.icloud.com/shortcuts/971ec889bf1748bc8dedad3ba3427b6e)** | Refreshes the local metric/rule data used by iOS protection and OpenHabits reminders/task checks in Calendar Alarms. |
+| **[Locked](https://www.icloud.com/shortcuts/d156f901cf734dbfb0ccb5689b564fdc)** | Checks your rules when a protected app opens and redirects you when blocked. NOTE: *You will need to set an automation to run this whenever a protected app is opened (you choose the apps). Further instructions can be found inside the shortcut.*|
+| **[Allowed](https://www.icloud.com/shortcuts/6f039200e4e146789659301e609f085a)** | Handles allowed access and lets you request a temporary unlock. *Further instructions can be found inside the shortcut.*|
+| **[Update Lockout Cache](https://www.icloud.com/shortcuts/89f524dec58a4701af1e1d381a0d51fd)** | Refreshes the local metric/rule data used by iOS protection and OpenHabits reminders/task checks in Calendar Alarms. |
 
 **For screen-time tracking**, finish the basic demos first, then follow [screen-time setup](guides/ios-lockouts.md#add-a-screen-time-allowance). It covers the timer helpers, app automations, and verification.
 
