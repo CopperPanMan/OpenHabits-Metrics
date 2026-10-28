@@ -5,7 +5,7 @@
 ## Connect once
 
 1. Finish [Metrics setup](../setup.md) and install Calendar Alarms using its [Setup Guide](https://github.com/CopperPanMan/Calendar-Alarms-for-iOS/blob/main/Setup%20Guide.md).
-2. Install **Update Lockout Cache** from the [Metrics shortcut toggles](../setup.md#3-install-the-phone-shortcuts) and follow the Scriptable steps under [Connect Insights](../setup.md#4-connect-insights). It uses your existing connection settings; Locked, Allowed, app-open automations, and blocking rules are not needed for this integration.
+2. Install **Update Lockout Cache** from the [Metrics shortcut toggles](../setup.md#3-install-the-iphone-shortcuts) and follow the Scriptable steps under [Connect Insights](../setup.md#4-connect-insights). It uses your existing connection settings; Locked, Allowed, app-open automations, and blocking rules are not needed for this integration.
 3. Run **Update Lockout Cache** without input, then run **Calendar Alarms Actions** setup. Approve its permissions with your phone unlocked.
 
 The integration reads `Shortcuts/OpenHabits/OpenHabits Metrics/lockoutCache.json`. It does not need another web app deployment or a second secret.

@@ -204,10 +204,43 @@ function openHabitsPreviewConfig(configJson) {
   try { config = typeof configJson === 'string' ? JSON.parse(configJson) : configJson; } catch (error) { return { ok: false, errors: ['Invalid JSON: ' + error.message] }; }
   var validation = openHabitsValidateConfig_(config);
   if (!validation.ok) return validation;
+  var referenceErrors = openHabitsValidateBlockReferences_(config);
+  if (referenceErrors.length) return { ok: false, errors: referenceErrors, warnings: [] };
   var tracking = openHabitsSpreadsheet_().getSheetByName(config.trackingSheetName);
   var values = tracking && tracking.getLastRow() ? openHabitsReadIdAndLabelRows_(tracking, config) : [];
   var plan = openHabitsPlanReconciliation_(config, values.slice(1));
   return { ok: plan.ok, errors: plan.duplicates.length ? ['Duplicate Tracking Data IDs: ' + plan.duplicates.join(', ')] : [], warnings: validation.warnings, plan: plan };
+}
+
+// Validate new saves without preventing older configurations from loading for repair.
+// Only the active rule type's references matter; other type settings may be retained.
+function openHabitsValidateBlockReferences_(config) {
+  var errors = [];
+  var metrics = config.metricSettings || [];
+  (((config.lockouts || {}).blocks) || []).forEach(function (block, index) {
+    if (!block) return;
+    var specific = block.typeSpecific || {};
+    var references, expectedType, field;
+    if (block.type === 'duration_block') {
+      references = [(specific.duration || {}).screenTimeID];
+      expectedType = 'duration'; field = 'Screen Time Metric ID';
+    } else if (block.type === 'firstXMinutesAfterTimestamp_block') {
+      references = [(specific.firstXMinutes || {}).timestampID];
+      expectedType = 'timestamp'; field = 'Timestamp Metric ID';
+    } else if (block.type === 'task_block') {
+      references = Array.isArray(specific.task_block_IDs) ? specific.task_block_IDs : [];
+      field = 'Required Metric ID';
+      if (!references.length) errors.push('Block ' + (index + 1) + ': choose at least one required metric.');
+    } else return;
+    references.forEach(function (id) {
+      var label = 'Block ' + (index + 1) + ': ';
+      var metric = metrics.find(function (metric) { return metric.metricID === id; });
+      if (typeof id !== 'string' || !id.trim()) errors.push(label + field + ' is required.');
+      else if (!metric) errors.push(label + 'referenced Metric ID "' + id + '" was not found.');
+      else if (expectedType && metric.dataType !== expectedType) errors.push(label + field + ' must reference a ' + expectedType + ' metric; "' + id + '" is ' + metric.dataType + '.');
+    });
+  });
+  return errors;
 }
 
 function openHabitsSaveAndApply(configJson, options) {

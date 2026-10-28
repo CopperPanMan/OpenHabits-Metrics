@@ -2,6 +2,8 @@
 
 The [setup demo](../setup.md#time-a-session) uses **Toggle Timer Template** itself, preloaded with `[["time_working"]]`. Run it once to start and again to stop; completed sessions add to **Time Working** in the Sheet.
 
+Before using the current timer, complete [Prepare Scriptable](../setup.md#prepare-scriptable): install **OpenHabits Runtime** and create its **Shortcuts** file bookmark. The timer needs these to confirm a recording even when app protection and Calendar Alarms are not in use.
+
 ## Make your own timer
 
 Add a duration metric in the Config Editor and choose additive recording if sessions should accumulate. Duplicate your installed **Toggle Timer Template**, replace its configured metric ID, and confirm its recording action calls **Insights**. Test a short session before adding automations.

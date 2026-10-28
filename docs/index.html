@@ -70,6 +70,7 @@
 
     <section class="panel" aria-labelledby="metricTextHeading">
       <h2 id="metricTextHeading">Shortcut-ready metric text</h2>
+      <p>For a new metric, first use <strong>Finish and Copy for OpenHabits → Save and Apply</strong> in your Sheet. Then duplicate <strong>Metric(s) Logger Template</strong>, rename it, and paste the text below into its <strong>Text</strong> action. Run your logger once and check its Sheet cell.</p>
       <p>Select metrics, then copy the generated text into your logger’s <strong>Text</strong> action. Completion and timestamp entries are ready to run. Other types use a named placeholder such as <code>&lt;water_provided_input&gt;</code>; replace it with the magic variable from the input action for that metric, or enter a fixed value below. Fixed text values are escaped automatically. See <a href="https://github.com/CopperPanMan/OpenHabits-Metrics/blob/main/Repo%20Docs/guides/metrics.md">logger setup</a> for live free-form text.</p>
       <label for="shortcutMetricSearch">Find configured metrics</label>
       <input id="shortcutMetricSearch" type="search" autocomplete="off" placeholder="Search by name or metric ID">
