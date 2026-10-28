@@ -23,6 +23,7 @@ function loadLauncher() {
   const html = fs.readFileSync(path.join(__dirname, '../SetupV2Launcher.html'), 'utf8');
   const elements = Object.fromEntries(Array.from(html.matchAll(/id="([^"]+)"/g), match => [match[1], new Element()]));
   elements.systemIssues.hidden = true;
+  elements.deviceRefresh.hidden = true;
   const requests = [];
   const clipboard = [];
   function runner(success, failure) {
@@ -76,6 +77,7 @@ test('healthy and bundled configurations keep full checks out of the editing flo
     }
     assert.equal(fixture.elements.copyCurrent.disabled, false);
     assert.equal(fixture.elements.handoffStatus.textContent, 'Ready.');
+    assert.equal(fixture.elements.deviceRefresh.hidden, true);
   }
 });
 
@@ -109,6 +111,7 @@ test('save and undo refresh diagnostics and the configuration copied to the edit
   assert.equal(fixture.elements.save.disabled, false);
   fixture.elements.save.fire();
   fixture.respond('openHabitsSaveAndApply', { ok: true, addedRows: [] });
+  assert.equal(fixture.elements.deviceRefresh.hidden, false);
   fixture.respond('openHabitsGetConfigBridgeData', { ...bridge(healthy, '{"edited":true}'), updatedAt: '2026-10-06T12:00:00Z' });
   assert.equal(fixture.elements.configJson.value, '');
   assert.match(fixture.elements.savedAt.textContent, /Configuration last saved/);
@@ -116,10 +119,22 @@ test('save and undo refresh diagnostics and the configuration copied to the edit
   assert.equal(fixture.clipboard.at(-1), '{"edited":true}');
 
   fixture.elements.undo.fire();
+  fixture.elements.deviceRefresh.hidden = true;
   fixture.respond('openHabitsUndoLastConfigChange', { ok: true });
+  assert.equal(fixture.elements.deviceRefresh.hidden, false);
   fixture.respond('openHabitsGetConfigBridgeData', bridge(healthy, '{"initial":true}'));
   await fixture.elements.copyCurrent.fire();
   assert.equal(fixture.clipboard.at(-1), '{"initial":true}');
+});
+
+test('a rejected save does not imply that the phone should refresh new settings', () => {
+  const fixture = loadLauncher();
+  fixture.respond('openHabitsGetConfigBridgeData', bridge(healthy));
+  fixture.elements.configJson.value = '{}';
+  fixture.elements.save.fire();
+  fixture.respond('openHabitsSaveAndApply', { ok: false, errors: ['Invalid rule reference.'] });
+  assert.equal(fixture.elements.deviceRefresh.hidden, true);
+  assert.match(fixture.elements.result.textContent, /Cannot apply/);
 });
 
 test('older status responses cannot restore warnings after a newer check succeeds', () => {

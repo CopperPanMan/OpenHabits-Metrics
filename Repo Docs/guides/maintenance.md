@@ -31,7 +31,7 @@ Changing a display name is independent of its metric ID. Changing an ID creates 
 | Metric/global/rule configuration | Save and Apply; refresh iOS caches |
 | Apps Script source files | Replace the corresponding files; **Deploy → Manage deployments → Edit → New version → Deploy** to keep the existing deployment URL |
 | iOS shared shortcut | Install the updated version, reselect imported action connections, and test it |
-| Metrics Scriptable runtime/evaluator | Rerun updated Insights setup with Locked installed, or replace both named scripts manually |
+| Metrics Scriptable runtime/evaluator | Rerun current Insights setup with Toggle Timer Template or Update Lockout Cache installed, or replace both named scripts manually; keep the Shortcuts bookmark |
 | Chrome extension source | Update the local extension folder and choose Reload in `chrome://extensions` |
 
 The current inline installer replaces managed scripts after validating downloaded source; it keeps settings, cache, timer, and unlock-state files. Historical installers that skip existing files do not update them. The [runtime reference](../runtime.md) describes the current wiring and remaining on-device checks.

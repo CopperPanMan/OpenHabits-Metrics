@@ -22,6 +22,8 @@ A task block remains active if **any** required metric is incomplete. Completion
 
 A duration block needs a configured duration metric and its corresponding Sheet row. An empty cell for that existing row counts as zero use. Connect [phone timers](ios-lockouts.md#track-protected-app-time) or [Chrome logging](chrome.md) to supply actual use. A zero-minute limit blocks throughout its window even without recorded use.
 
+The editor offers duration metrics for screen-time rules and timestamp metrics for timestamp rules. Finish/Save and Apply reject missing, unknown, or incompatible metric references; a task rule needs at least one required metric. Imported incompatible references remain visible so you can choose a replacement. Older saved configurations still load for repair.
+
 A timestamp rule needs a valid timestamp for the tracking day. If none exists, that rule does not block; pair it with a task block if the timestamp must be logged before access is allowed.
 
 ## Time windows and order

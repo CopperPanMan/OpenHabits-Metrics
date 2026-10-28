@@ -297,6 +297,21 @@
     });
 
     document.addEventListener('openhabits:metrics-changed', event => updateConfiguredMetrics(event.detail));
+    document.addEventListener('openhabits:setup-logging', event => {
+      const id = event.detail;
+      selectedMetricIds.clear();
+      shortcutSearch.value = '';
+      if (/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(id || '') && configuredMetrics.filter(metric => metric.metricID === id).length === 1) {
+        selectedMetricIds.add(id);
+        updateConfiguredMetrics(configuredMetrics);
+        generateShortcutText();
+      } else {
+        updateConfiguredMetrics(configuredMetrics);
+        shortcutStatus.textContent = 'Give this metric a valid, unique Metric ID before setting up its logger.';
+      }
+      shortcutOutput.scrollIntoView({ block: 'center' });
+      shortcutOutput.focus({ preventScroll: true });
+    });
     updateMode();
     updateConfiguredMetrics(window.OpenHabitsConfiguredMetrics || []);
   }

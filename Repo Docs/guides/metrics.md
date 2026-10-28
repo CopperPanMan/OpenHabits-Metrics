@@ -27,7 +27,7 @@ The IDs in these examples must exist in your configuration. The **Done / not don
 ## Make its logger
 
 1. Duplicate your installed **Metric(s) Logger Template** and rename it.
-2. In the editor's **Shortcut-ready metric text**, select the metric and generate/copy its text.
+2. Open the metric in the editor and choose **Set up logging for this metric** to select it and generate its text. Choose **Copy metric text**. You can also select several metrics in **Shortcut-ready metric text** and generate their text together.
 3. Paste it into the logger's **Text** action. The generator uses the configured type: completion sends `1`, timestamps need no value, and numbers, text, and durations receive a placeholder named for their metric, such as `<mood_provided_input>`. Confirm **Run Shortcut** calls **Insights**.
 4. Run it, then check the matching Sheet cell.
 

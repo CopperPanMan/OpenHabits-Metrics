@@ -1038,20 +1038,23 @@
     return `${root}_${suffix}`;
   }
 
-  function metricReferenceOptions(currentValue) {
-    const options = [{ value: '', label: 'None / disabled' }];
-    state.metricSettings.forEach(metric => options.push({
+  function metricReferenceOptions(currentValue, dataType) {
+    const options = [{ value: '', label: dataType ? `Choose a ${dataType} metric` : 'Choose a metric' }];
+    state.metricSettings.filter(metric => !dataType || metric.dataType === dataType).forEach(metric => options.push({
       value: metric.metricID,
       label: `${metric.displayName || 'Unnamed metric'} — ${metric.metricID || 'missing ID'}`
     }));
-    if (currentValue && !state.metricSettings.some(metric => metric.metricID === currentValue)) {
-      options.push({ value: currentValue, label: `${currentValue} — not found in configured metrics` });
+    if (currentValue && !options.some(option => option.value === currentValue)) {
+      const metric = state.metricSettings.find(metric => metric.metricID === currentValue);
+      options.push({ value: currentValue, label: metric
+        ? `${metric.displayName || currentValue} — needs a ${dataType} metric (currently ${metric.dataType})`
+        : `${currentValue} — not found in configured metrics` });
     }
     return options;
   }
 
-  function metricReferenceSelect(value, onChange) {
-    const select = makeSelect(metricReferenceOptions(value), value, onChange);
+  function metricReferenceSelect(value, onChange, dataType) {
+    const select = makeSelect(metricReferenceOptions(value, dataType), value, onChange);
     select.classList.add('reference-select');
     return select;
   }
@@ -1246,6 +1249,10 @@
       ], metric.timestampSettings.writeMode, v => { metric.timestampSettings.writeMode = v; renderAll(); }), 'Due-by timestamps reject writes after the matching date rule’s deadline.');
     }
     card.appendChild(g);
+    card.appendChild(button('Set up logging for this metric', 'secondary', () => {
+      publishConfiguredMetrics();
+      document.dispatchEvent(new CustomEvent('openhabits:setup-logging', { detail: metric.metricID }));
+    }, { trackHistory: false }));
 
     const advancedSummary = [`Advanced`, metricTypeLabel(metric.dataType)];
     if (metric.dataType === 'timestamp' || metric.dates.length > 0) {
@@ -1457,7 +1464,7 @@
     if (block.type === 'duration_block') {
       const d = document.createElement('div'); d.className = 'grid';
       field(d, 'Max Minutes', makeInput({ type: 'number', min: 0, value: block.typeSpecific.duration.maxMinutes, onChange: v => block.typeSpecific.duration.maxMinutes = v }), 'Hard cap on this block’s screen-time allowance. The block enforces it only during its active time window. Rationing releases the allowance gradually, but never raises this cap.');
-      field(d, 'Screen Time Metric ID', metricReferenceSelect(block.typeSpecific.duration.screenTimeID, v => block.typeSpecific.duration.screenTimeID = v), 'Metric used to read accumulated screen time.');
+      field(d, 'Screen Time Metric ID', metricReferenceSelect(block.typeSpecific.duration.screenTimeID, v => block.typeSpecific.duration.screenTimeID = v, 'duration'), 'Choose a duration metric that records accumulated screen time.');
       field(d, 'Rationing On', makeCheck(block.typeSpecific.duration.rationing.isON, v => block.typeSpecific.duration.rationing.isON = v), 'Gradually release a cumulative screen-time allowance from Begin Minutes to End Minutes across the block’s Begin Time and End Time. Access blocks when recorded use reaches the allowance available now, capped at Max Minutes.');
       field(d, 'Rationing Begin Minutes', makeInput({ type: 'number', min: 0, value: block.typeSpecific.duration.rationing.begMinutes, onChange: v => block.typeSpecific.duration.rationing.begMinutes = v }), 'Screen-time minutes available immediately at Begin Time. This is an allowance, not a time of day. The allowance then grows toward End Minutes, capped at Max Minutes.');
       field(d, 'Rationing End Minutes', makeInput({ type: 'number', min: 0, value: block.typeSpecific.duration.rationing.endMinutes, onChange: v => block.typeSpecific.duration.rationing.endMinutes = v }), 'Target allowance at End Time. Set this higher than Max Minutes to release the full cap earlier. Example: 09:00–17:00, Max 60, Begin 0, End 120 releases all 60 minutes by 13:00. The hard cap remains 60.');
@@ -1487,7 +1494,7 @@
     if (block.type === 'firstXMinutesAfterTimestamp_block') {
       const f = document.createElement('div'); f.className = 'grid';
       field(f, 'Minutes', makeInput({ type: 'number', min: 0, value: block.typeSpecific.firstXMinutes.minutes, onChange: v => block.typeSpecific.firstXMinutes.minutes = v }), 'Minutes after timestamp when block is active.');
-      field(f, 'Timestamp Metric ID', metricReferenceSelect(block.typeSpecific.firstXMinutes.timestampID, v => block.typeSpecific.firstXMinutes.timestampID = v), 'Timestamp metric used as the start of this temporary block.');
+      field(f, 'Timestamp Metric ID', metricReferenceSelect(block.typeSpecific.firstXMinutes.timestampID, v => block.typeSpecific.firstXMinutes.timestampID = v, 'timestamp'), 'Choose the timestamp metric that starts this temporary block.');
       typeSec.appendChild(f);
     }
     card.appendChild(typeSec);
@@ -1770,8 +1777,15 @@
       if (!/^\d{2}:\d{2}$/.test(b.times.beg) || !/^\d{2}:\d{2}$/.test(b.times.end)) blockIssue(`Block ${i + 1}: begin/end time must be HH:MM.`, !/^\d{2}:\d{2}$/.test(b.times.beg) ? 'Begin Time' : 'End Time');
       const references = blockMetricReferences(b);
       const field = b.type === 'task_block' ? 'Required Metric ID' : b.type === 'duration_block' ? 'Screen Time Metric ID' : 'Timestamp Metric ID';
+      const expectedType = b.type === 'duration_block' ? 'duration' : b.type === 'firstXMinutesAfterTimestamp_block' ? 'timestamp' : null;
+      if (b.type === 'task_block' && references.length === 0) {
+        blockIssue(`Block ${i + 1}: choose at least one required metric.`, null, { action: 'Add Required Metric ID' });
+      }
       references.forEach((id, occurrence) => {
-        if (id && !metricIds.includes(id)) blockIssue(`Block ${i + 1}: referenced Metric ID "${id}" was not found.`, field, { occurrence });
+        const metric = state.metricSettings.find(metric => metric.metricID === id);
+        if (!id || !String(id).trim()) blockIssue(`Block ${i + 1}: ${field} is required.`, field, { occurrence });
+        else if (!metric) blockIssue(`Block ${i + 1}: referenced Metric ID "${id}" was not found.`, field, { occurrence });
+        else if (expectedType && metric.dataType !== expectedType) blockIssue(`Block ${i + 1}: ${field} must reference a ${expectedType} metric; "${id}" is ${metric.dataType}.`, field, { occurrence });
       });
     });
     return issues;

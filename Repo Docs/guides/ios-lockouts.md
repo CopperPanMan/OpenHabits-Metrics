@@ -8,7 +8,7 @@ Start with one app and the day-plan example below. After it works, expand the ap
 
 ## Install and connect
 
-Finish [Metrics setup and the two demos](../setup.md). Install **Locked**, **Allowed**, and **Update Lockout Cache** from the [shortcut toggles](../setup.md#3-install-the-phone-shortcuts), and complete the Scriptable steps under **Connect Insights**. Keep the shared shortcuts' names so their referring actions work.
+Finish [Metrics setup and the two demos](../setup.md). Install **Locked**, **Allowed**, and **Update Lockout Cache** from the [shortcut toggles](../setup.md#3-install-the-iphone-shortcuts), and complete the Scriptable steps under **Connect Insights**. Keep the shared shortcuts' names so their referring actions work.
 
 Open each shortcut in the Shortcuts editor and read its **Comment blocks** for instructions and optional setup actions.
 

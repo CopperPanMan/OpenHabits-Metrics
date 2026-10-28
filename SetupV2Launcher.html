@@ -26,6 +26,7 @@
       <input id="configFile" type="file" accept="application/json,.json">
       <div id="result" class="notice status" aria-live="polite">Waiting for updated configuration.</div>
       <button id="save" type="button" disabled>Save and Apply</button>
+      <p id="deviceRefresh" class="status" hidden>Using iPhone app protection or Calendar Alarms reminders/task checks? Run <strong>Update Lockout Cache</strong> without input on each iPhone to refresh its configuration.</p>
     </section>
 
     <details class="panel">
@@ -189,6 +190,7 @@
         ? 'Configuration saved and applied. ' + response.addedRows.length + ' supporting ' + (response.addedRows.length === 1 ? 'row' : 'rows') + ' created.'
         : 'Configuration saved and applied.';
       result.className = 'notice status success';
+      document.getElementById('deviceRefresh').hidden = false;
       json.value = '';
       refreshSystemStatus();
     });
@@ -209,7 +211,10 @@
     advancedStatus.textContent = 'Restoring the previous configuration…';
     callServer('openHabitsUndoLastConfigChange', null, response => {
       advancedStatus.textContent = response.ok ? 'The last configuration change was undone.' : (response.errors || []).join(' ');
-      if (response.ok) refreshSystemStatus();
+      if (response.ok) {
+        document.getElementById('deviceRefresh').hidden = false;
+        refreshSystemStatus();
+      }
     }, advancedStatus);
   });
 

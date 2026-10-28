@@ -4,7 +4,7 @@ This guide connects your Sheet and shortcuts, then lets you try recording values
 
 **Use an AI to help you through setup.** You are encouraged to give an AI of your choice [a link to this repository](https://github.com/CopperPanMan/OpenHabits-Metrics) and ask it to guide you through setup and usage, explain settings, or answer questions as you go. This works best with capable paid models. Tell it what you want to track or protect so it can help you choose the relevant steps.
 
-You need a Google account and an iPhone with Apple Shortcuts. Scriptable is also used for iOS app protection and Calendar Alarms integration. Notion and third-party blocking apps are optional.
+You need a Google account and an iPhone with Apple Shortcuts and **Scriptable**. The provided timer uses Scriptable, as do iOS app protection and Calendar Alarms integration. Notion and third-party blocking apps are optional.
 
 ## 1. Copy the starter Sheet
 
@@ -17,6 +17,8 @@ You need a Google account and an iPhone with Apple Shortcuts. Scriptable is also
 | Time Working (`time_working`) | Adds elapsed time when you stop the timer |
 
 The **Tracking Data** tab holds your history. **OpenHabits → Open OpenHabits** opens its settings panel.
+
+The starter's tracking day begins at **5 a.m.**: a recording at 1 a.m. belongs to the previous tracking day. You can change this later under **Metrics → Metric Settings → Late Extension Hours**.
 
 <details>
 <summary>Install the Sheet manually (alternative)</summary>
@@ -33,7 +35,7 @@ The JSON configures the Sheet with the same starter metrics as the shared templa
 
 ## 2. Deploy your web app
 
-1. Open **Extensions → Apps Script → Project Settings**. Set its timezone to your local timezone.
+1. In the Sheet, open **File → Settings** and set its timezone to your intended home timezone. Then open **Extensions → Apps Script → Project Settings** and set the same timezone there.
 2. Under **Script properties**, add **OPENHABITS_SECRET** with a long random value. Keep it for the shortcut setup below.
 3. Choose **Deploy → New deployment → Web app**. Set **Execute as** to **Me** and **Who has access** to **Anyone**. Authorize and deploy.
 4. Copy the **deployment ID**, the portion between `/s/` and `/exec` in the URL:
@@ -62,18 +64,34 @@ Each shortcut contains **Comment blocks with instructions**. Open it in the Shor
 | **[Allowed](https://www.icloud.com/shortcuts/9ff62254e42946f68a1a2ca518da5d62)** | Handles allowed access and lets you request a temporary unlock. *Further instructions can be found inside the shortcut.*|
 | **[Update Lockout Cache](https://www.icloud.com/shortcuts/971ec889bf1748bc8dedad3ba3427b6e)** | Refreshes the local metric/rule data used by iOS protection and OpenHabits reminders/task checks in Calendar Alarms. |
 
-**For screen-time tracking**, make a **Toggle Screen Time Timer** from Toggle Timer Template, configured for your screen-time duration metric. First ensure the installed timer supports `start_overwrite` using the [updated action readout](shortcut-actions/Toggle%20Timer%20Template.md). Create **Start Screen Time Timer** to run it with input `start_overwrite` at each new app session, and **Stop Screen Time Timer** to run it with input `stop`. A fresh start discards an unfinished interval left by a missed stop while preserving completed pending time; ordinary `start` remains available for blind repeated starts. Configure Allowed to run the start helper when access is allowed, and an **App → Is Closed → Run Immediately** automation to run the stop helper whenever any protected app closes. Follow the [screen-time setup](guides/ios-lockouts.md#add-a-screen-time-allowance) for the full wiring and test.
+**For screen-time tracking**, finish the basic demos first, then follow [screen-time setup](guides/ios-lockouts.md#add-a-screen-time-allowance). It covers the timer helpers, app automations, and verification.
 
 ## 4. Connect Insights
 
+### Prepare Scriptable
+
+Do this for the timer demo even if you are not using app protection or Calendar Alarms.
+
+1. Install **Scriptable**, open **Settings → File Bookmarks**, and create a bookmark named exactly **Shortcuts** pointing to **iCloud Drive/Shortcuts**.
+2. Keep **Toggle Timer Template** under its original name until Insights setup is finished. The current Insights installer detects that template or **Update Lockout Cache** and installs the helper scripts.
+
+### Enter your connection settings
+
 Manually run **Insights**. Enter the same **Secret** and **Web App Id** from step 2, then choose **I'm Finished**. Both templates use these connection settings.
 
-<details>
-<summary>If you installed Update Lockout Cache: prepare Scriptable</summary>
+Open Scriptable and confirm **OpenHabits Runtime** is present before trying the timer. Its **Shortcuts** bookmark is needed when the timer confirms a recording.
 
-1. Install **Scriptable** and create a file bookmark named **Shortcuts** pointing to **iCloud Drive/Shortcuts**.
-2. Run **Insights** setup again after Update Lockout Cache is installed. Its published installer wiring downloads **OpenHabits Runtime** and **lockouts** to Scriptable.
-3. Run **Update Lockout Cache** without input once, with the phone unlocked, and approve its permissions.
+<details>
+<summary>If OpenHabits Runtime is missing after setup</summary>
+
+An older Insights shortcut may only install scripts when app protection is present. In Scriptable, create scripts named **OpenHabits Runtime** and **lockouts**, pasting the full contents of [OpenHabits Runtime.js](../OpenHabits%20Runtime.js) and [lockouts.js](../lockouts.js) respectively. Keep the **Shortcuts** bookmark from above. These scripts provide the current timer and integration helpers; installing them does not change the actions inside an older shortcut.
+
+</details>
+
+<details>
+<summary>If you installed Update Lockout Cache: refresh your phone</summary>
+
+Confirm **lockouts** is also present in Scriptable. If it is missing, rerun Insights setup or use the manual installation above. Run **Update Lockout Cache** without input once, with the phone unlocked, and approve its permissions.
 
 Follow [app protection](guides/ios-lockouts.md) to activate protection, or [Calendar Alarms integration](guides/calendar-alarms.md) to use reminders and task checks. Installing these shortcuts alone does not protect apps.
 
@@ -103,7 +121,23 @@ If either demo fails, use [Troubleshooting](guides/maintenance.md#troubleshootin
 
 ## 6. Make it yours
 
-Open the Sheet's settings panel and use **Copy Current Configuration → Open Config Editor**. Load the copied configuration, customize it, then use **Finish and Copy for OpenHabits** and **Save and Apply** back in the Sheet panel.
+### Create your first personal habit
+
+Try a one-tap habit called **Flossed**:
+
+1. Open the Sheet's settings panel and use **Copy Current Configuration → Open Config Editor → Load Copied Configuration**.
+2. Under **Add a metric**, choose **Done / not done**, click **Add metric**, and change its Display Name to **Flossed**. Its generated Metric ID becomes `flossed`; keep that ID.
+3. Choose **Finish and Copy for OpenHabits**, return to the Sheet panel, paste the configuration, and choose **Save and Apply**. This creates its tracking row; ordinary configuration changes do not need a new deployment.
+4. Return to the editor, open Flossed, and choose **Set up logging for this metric**. The generator selects it and produces `[["flossed",1]]`. Choose **Copy metric text**.
+5. Duplicate **Metric(s) Logger Template**, rename the copy **Log Flossed**, and replace its entire **Text** action with the copied text. Confirm its **Run Shortcut** action calls **Insights**.
+6. Run **Log Flossed**, approve any permissions, and check that its Sheet cell is `1`. Add it to your Home Screen or a Shortcuts widget so it is easy to run after flossing. This recipe keeps the first recording, so a second tap that day leaves it at `1`.
+
+The same flow works for other metrics. See [logger input examples](guides/metrics.md) for values you enter each time, [timers](guides/timers.md) for durations, or [quick launchers](guides/launchers.md) for QR codes, NFC, and Siri.
+
+If you use iPhone app protection or Calendar Alarms reminders/task checks, run **Update Lockout Cache** without input on each iPhone after applying configuration changes.
+
+<details>
+<summary>Organize a larger configuration and find advanced settings</summary>
 
 Metric and block cards start collapsed when you load a configuration. Click a card's header to edit it, or use **Expand All / Collapse All** in either tab. Drag the grab handle on a metric or block header to rearrange it, or use the up/down arrows. Each block's numbered rule order determines which applicable rule supplies the message. New and duplicated items open automatically. **Create folder** adds a folder tile in either list; drag cards onto its header to move them inside, and click the header to open or close it. Moving a folder or assigning its contents keeps block priority. Search metrics by name or ID, and blocks by name, preset, or referenced metric; search also finds folder names and reveals matches inside closed folders. If finishing reveals validation errors, the editor opens the affected folder and field; select another error to jump to its settings.
 
@@ -111,7 +145,7 @@ Settings shared by metrics live under **Metrics → Metric Settings**, closed by
 
 The panel shows a notice when a setup issue needs attention. Full checks and the last-saved time are under **Troubleshooting and preferences → System diagnostics**; when everything is ready, you can go straight to applying your editor changes.
 
-Duplicate the logger or timer template for your own metrics. See [logger input examples](guides/metrics.md) or [timers](guides/timers.md) when you need them. New rows are created when you apply the configuration; ordinary configuration changes do not need a new deployment.
+</details>
 
 ## 7. Set up app protection
 
