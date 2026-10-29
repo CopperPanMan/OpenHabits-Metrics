@@ -6,7 +6,7 @@ Users receive a **Google Sheets copy link**, not a spreadsheet document in Git. 
 
 The published starter is temporarily owned by the maintainer’s personal Google account. Transfer ownership to a neutral Sierra Mille account when available, keeping the existing Sheet and copy link.
 
-1. Create a fresh template Sheet while signed in to the **maintainer account** that will own/share it (prefer a neutral Sierra Mille account). Follow the [manual installation](../Repo%20Docs/setup.md#1-copy-the-starter-sheet) to add the four script files and two HTML files; import the starter JSON and **Save and Apply**.
+1. Create a fresh template Sheet while signed in to the **maintainer account** that will own/share it (prefer a neutral Sierra Mille account). Follow the [manual installation](../Repo%20Docs/setup.md#1-copy-the-starter-sheet) to add the four script files, two HTML files, and [appsscript.json](../appsscript.json) manifest; import the starter JSON and **Save and Apply**.
 2. Confirm Tracking Data contains the nine IDs below. Blocking and Notion are disabled; users add their own rules after the demos.
 3. Test on a private copy with a new secret/deployment. Keep the public template's rows and headers but clear demo recordings from column C onward.
 4. Check current and previous configurations in **_OpenHabits Config** contain only starter settings. Remove personal IDs, API tokens, secrets, deployments, and installed triggers from the public template's bound project. Users create their own credentials/deployment and optional streak trigger after copying.
@@ -24,6 +24,12 @@ The published starter is temporarily owned by the maintainer’s personal Google
 | `point_total_alltime` | Cumulative points |
 
 The late extension is five hours and schedules default to every day. Two water-demo runs produce two glasses, the latest timestamp, and three total points before any work session. Blank history gives users their own starting point. Do not apply this starter over an existing personal configuration unless you intend to replace that configuration; it does not rename historical rows or existing loggers.
+
+## Keep authorization consistent
+
+The starter’s bound project must use the repository’s explicit `oauthScopes` list in [appsscript.json](../appsscript.json), with `calendar.readonly` rather than `calendar`. Preserve the intended timezone. Do not rely on automatically inferred scopes: the preset-calendar code only reads calendars, while automatic inference can request write/delete access.
+
+After changing scripts or scopes, make a fresh private copy and verify its **Overview → Project OAuth Scopes** and consent screen. Check the launcher, Sheet configuration and logging, preset-calendar lookup, optional Notion calls, and optional streak trigger with the declared scopes. Keep test credentials, triggers, deployments, and recordings out of the public starter. Refresh the setup guide’s permissions screenshot and explanations when the scope list changes. Existing copies need the guide’s [permission-update steps](../Repo%20Docs/setup.md#authorize-your-copy); updating the shared starter does not update them.
 
 ## Prepare the six shared shortcuts
 

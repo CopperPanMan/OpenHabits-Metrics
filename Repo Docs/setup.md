@@ -18,6 +18,9 @@ You need a Google account and an iPhone with Apple Shortcuts and **Scriptable**.
 
 The **Tracking Data** tab holds your history. **OpenHabits → Open OpenHabits** opens its settings panel.
 
+> [!NOTE]
+> **Google may ask for authorization when you first open OpenHabits.** If you see “Google hasn’t verified this app,” read [Authorize your copy](#authorize-your-copy) below. The same permissions are requested if you deploy first.
+
 The starter's tracking day begins at **5 a.m.**: a recording at 1 a.m. belongs to the previous tracking day. You can change this later under **Metrics → Metric Settings → Late Extension Hours**.
 
 <details>
@@ -26,8 +29,9 @@ The starter's tracking day begins at **5 a.m.**: a recording at 1 a.m. belongs t
 1. Create a Google Sheet. Open **Extensions → Apps Script**.
 2. Create script files and paste [Main.gs](../Main.gs), [Config.gs](../Config.gs), [Lockouts.gs](../Lockouts.gs), and [SetupV2.gs](../SetupV2.gs).
 3. Create HTML files named **SetupV2Launcher** and **SetupV2Styles**, using [SetupV2Launcher.html](../SetupV2Launcher.html) and [SetupV2Styles.html](../SetupV2Styles.html). Apps Script adds the `.html` extension.
-4. Save, run **openHabitsShowLauncher** once, authorize it, and reload the Sheet.
-5. In the OpenHabits panel, choose [starter-config.json](../Examples/starter-config.json) under **Or choose a configuration backup**, then **Save and Apply**.
+4. In **Project Settings**, enable **Show “appsscript.json” manifest file in editor**. Return to **Editor**, open **appsscript.json**, and replace its contents with [appsscript.json](../appsscript.json). This explicitly sets the permissions, including read-only Calendar access. Set the script timezone to match your Sheet.
+5. Save, run **openHabitsShowLauncher** once, follow [Authorize your copy](#authorize-your-copy), and reload the Sheet.
+6. In the OpenHabits panel, choose [starter-config.json](../Examples/starter-config.json) under **Or choose a configuration backup**, then **Save and Apply**.
 
 The JSON configures the Sheet with the same starter metrics as the shared template.
 
@@ -37,12 +41,61 @@ The JSON configures the Sheet with the same starter metrics as the shared templa
 
 1. In the Sheet, open **File → Settings** and set its timezone to your intended home timezone. Then open **Extensions → Apps Script → Project Settings** and set the same timezone there.
 2. Under **Script properties**, add **OPENHABITS_SECRET** with a long random value. Keep it for the shortcut setup below.
-3. Choose **Deploy → New deployment → Web app**. Set **Execute as** to **Me** and **Who has access** to **Anyone**. Authorize and deploy.
+3. Choose **Deploy → New deployment → Web app**. Set **Execute as** to **Me** and **Who has access** to **Anyone**. Before choosing **Authorize access**, read the note below, then authorize and deploy.
 4. Copy the **deployment ID**, the portion between `/s/` and `/exec` in the URL:
 
    `https://script.google.com/macros/s/DEPLOYMENT_ID/exec`
 
 Your secret lets your shortcuts call this deployment. A script bound to your Sheet does not need a separate spreadsheet ID property. [Google's deployment instructions](https://developers.google.com/apps-script/guides/web) explain the account-specific deployment options.
+
+### Authorize your copy
+
+> [!NOTE]
+> **Google will ask you to authorize OpenHabits.** You may see “Google hasn’t verified this app.” This means the script has not completed Google’s app-verification process; the warning itself is not a malware detection result.
+>
+> You’re authorizing the Apps Script attached to your copy of the Sheet. Review the permissions below before continuing. Some cover more of your account than the features currently use. Authorizing the script does not itself share your Sheet with the template’s maintainer.
+
+If you deploy first, Google starts with **Authorize access**, then asks you to choose an account, review the unverified-app warning, and review permissions. If you opened **OpenHabits → Open OpenHabits** first, authorization may have started there instead; Google may skip screens you have already completed.
+
+Check that you started from **your own copy** of the linked starter and selected the intended Google account. If you trust that copy and want to continue, choose **Advanced → Go to [your script’s name] (unsafe)** on the unverified-app screen, then review the permissions and continue. Google’s wording, app name, and displayed developer email can vary by account and script copy. An administrator may restrict this flow for a work or school account.
+
+<details>
+<summary>What each permission allows, and why OpenHabits requests it</summary>
+
+- **Google Sheets — see, edit, create, and delete spreadsheets.** OpenHabits reads and writes your metric history, configuration, and tracking rows. Google’s grant covers all your Sheets; it is not restricted to this copy. The script uses the bound Sheet by default and also supports a spreadsheet explicitly configured by ID.
+- **Google Calendar — see and download calendars you can access.** The optional preset-calendar feature reads event titles from the calendar you configure to choose a day’s preset. The grant covers calendars you can access, not just that configured calendar. The current manifest requests **read-only** access: it does not grant permission to create, edit, share, or delete calendars or events. Older copies may still request the broader Calendar permission; see the update instructions below.
+- **Connect to an external service.** The optional Notion integration sends requests to Notion’s API when configured and used. This Google permission permits external requests generally; it is not limited to Notion. The starter has Notion disabled and contains no Notion token.
+- **Run when you are not present.** OpenHabits can install a scheduled trigger to recompute streaks, so that work can happen while the Sheet is closed. Authorizing this permission does not install the trigger; the starter includes no installed triggers.
+- **Display and run third-party web content in prompts and sidebars.** This lets OpenHabits display its HTML settings panel inside Google Sheets. It does not install a browser extension.
+
+These permissions are listed explicitly in [appsscript.json](../appsscript.json). Calendar and Notion features are optional, but their permissions are still requested by this combined script. Declining individual permissions can cause features or setup to fail; OpenHabits does not yet guide you through partial authorization.
+
+You can inspect the code under **Extensions → Apps Script** and remove the script’s access later from [your Google Account’s third-party connections](https://myaccount.google.com/connections). Removing access prevents authorized features from working until you authorize again. See Google’s explanations of [Apps Script scopes](https://developers.google.com/apps-script/concepts/scopes) and [unverified apps](https://support.google.com/googleapi/answer/7454865).
+
+</details>
+
+<details>
+<summary>See the permissions screen</summary>
+
+![Google consent list showing Sheets, read-only Calendar, external requests, background execution, and sidebar permissions](images/google-permissions.png)
+
+Captured from a fresh starter copy with the explicit manifest. Account details are cropped out. Google’s layout and wording may vary; the Calendar item should allow viewing/downloading rather than editing or deleting.
+
+</details>
+
+<details>
+<summary>Update permissions in a Sheet you copied earlier</summary>
+
+New copies of the starter already include the explicit permissions. Existing copies do not update automatically.
+
+1. Open your copy’s **Extensions → Apps Script → Project Settings** and enable **Show “appsscript.json” manifest file in editor**.
+2. Open **appsscript.json** in the editor. Copy the complete **oauthScopes** array from the repository’s [manifest](../appsscript.json) into your existing manifest. Keep your timezone and any existing deployment settings. If you added custom integrations, review their permission needs before replacing the list.
+3. Save. If you already deployed a web app, use **Deploy → Manage deployments → Edit → New version → Deploy** so your existing deployment uses the updated manifest.
+4. To replace a previously granted broad authorization, remove this script’s access from [Google Account connections](https://myaccount.google.com/connections), then open **OpenHabits → Open OpenHabits** and authorize again. Review the Calendar item: it should say **see and download**, not **edit, share, and permanently delete**. Your shortcuts and scheduled jobs may fail between removal and reauthorization.
+
+Changing the manifest does not complete Google verification, so the unverified-app warning may still appear.
+
+</details>
 
 ## 3. Install the iPhone shortcuts
 
