@@ -102,6 +102,8 @@ than 9/19 minutes. `calendarMinutes` describes that nominal duration; use
 `calendarEnd` for the actual event end. The notification formats the actual
 deadline. No extra -1-minute offset belongs in the alarm notes.
 
+When a protected app reopens during that grant, `app_open` returns `route: "allow"` and omits `calendarEnd`. Locked checks **CalendarEnd has any value** before logging a penalty or creating the expiry event. Reopening the app therefore uses the existing deadline and skips both actions.
+
 Example: a legitimate grant at 12:00:37 previously expired locally at 12:20:37,
 while the corresponding Clock time was 12:20. The new shared deadline is 12:19:00.
 At or after that time the temporary unlock no longer grants entry. Normal rules

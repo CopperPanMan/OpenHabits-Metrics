@@ -1,6 +1,6 @@
 # Locked
 
-Full action readout, 2026-10-19, for OpenHabits Runtime 1.2.2 and lockouts.js. It includes the audited `shortcut.name` binding and explicit preset Title extraction. Blocking-app actions remain optional comments to customize. Updating this file does not update installed or shared Shortcut exports. Expected-preset tracking is handled by the runtime behind the existing calls.
+Action flow for the November 19, 2026 [Locked download](../setup.md), used with OpenHabits Runtime 1.2.2 and lockouts.js. For Jomo integration, select your own session in the three Start Session actions and the Stop Session action below, and in the Stop action in **Allowed**. You can remove those actions if you only use the native Home Screen redirect.
 Arrows label magic-variable outputs. All Run Script actions use Run in App: Off.
 The ending calendar alarm uses `calendarEnd` directly, with zero offset; do not
 subtract another minute in the event notes or native actions.
@@ -15,6 +15,8 @@ LIST
     Item 2: Shortcut Input
 RUN SCRIPT: OpenHabits Runtime
     Parameter: List
+    -> OpenResultRaw
+GET DICTIONARY FROM INPUT: OpenResultRaw
     -> OpenResult
 GET DICTIONARY VALUE: route from OpenResult
     -> Route
@@ -37,7 +39,8 @@ IF Route is evaluate
         -> EvaluatorInputJSON (Text)
     RUN SCRIPT: lockouts
         Parameter: EvaluatorInputJSON
-        Output Type: Dictionary
+        -> EvaluationRaw
+    GET DICTIONARY FROM INPUT: EvaluationRaw
         -> Evaluation
     GET DICTIONARY VALUE: status from Evaluation
         -> Status
@@ -50,6 +53,7 @@ IF Route is evaluate
             -> BlockType
         IF Shortcut Input is not task_block
             COMMENT: Optional — start a blocking session in the blocking app of your choice.
+            JOMO: START SESSION (your blocking session, if used)
             PAUSE MEDIA
             GET DICTIONARY VALUE: shortcut from Evaluation
                 -> BlockShortcut
@@ -94,6 +98,7 @@ IF Route is evaluate
             STOP THIS SHORTCUT
         OTHERWISE
             COMMENT: Optional — start a blocking session in the blocking app of your choice.
+            JOMO: START SESSION (your blocking session, if used)
             PAUSE MEDIA
             GO TO HOME SCREEN
             SHOW NOTIFICATION: OpenHabits: lockout evaluation failed.
@@ -103,13 +108,15 @@ IF Route is evaluate
 OTHERWISE
     IF Route is allow
         COMMENT: Optional — stop the blocking session in the blocking app of your choice.
+        JOMO: STOP SESSION (your blocking session, if used)
         GET DICTIONARY VALUE: calendarEnd from OpenResult
             -> CalendarEnd
-        IF CalendarEnd is not [blank]
+        IF CalendarEnd has any value
             GET SHORTCUTS: All Shortcuts
                 -> InstalledShortcuts
             GET DICTIONARY VALUE: penalty from OpenResult
-            IF Dictionary Value is Yes (Boolean)
+                -> Penalty
+            IF Penalty is Yes (Boolean)
                 IF InstalledShortcuts contains Log Screen Time Lock Off
                     RUN SHORTCUT: Log Screen Time Lock Off
                         Input: None
@@ -152,6 +159,7 @@ OTHERWISE
         END IF
     OTHERWISE
         COMMENT: Optional — start a blocking session in the blocking app of your choice.
+        JOMO: START SESSION (your blocking session, if used)
         PAUSE MEDIA
         GO TO HOME SCREEN
     END IF
