@@ -90,7 +90,7 @@ Each shortcut contains **Comment blocks with instructions**. Open it in the Shor
 
 | Shortcut & install link | What it does and why you need it |
 | --- | --- |
-| **[Locked](https://www.icloud.com/shortcuts/d156f901cf734dbfb0ccb5689b564fdc)** | Checks your rules when a protected app opens and redirects you when blocked. NOTE: *You will need to set an automation to run this whenever a protected app is opened (you choose the apps). Further instructions can be found inside the shortcut.*|
+| **[Locked](https://www.icloud.com/shortcuts/8e69881cff2d4c43a0194003c1cb86c7)** | Checks your rules when a protected app opens and redirects you when blocked. NOTE: *You will need to set an automation to run this whenever a protected app is opened (you choose the apps). Further instructions can be found inside the shortcut.*|
 | **[Allowed](https://www.icloud.com/shortcuts/6f039200e4e146789659301e609f085a)** | Handles allowed access and lets you request a temporary unlock. *Further instructions can be found inside the shortcut.*|
 | **[Update Lockout Cache](https://www.icloud.com/shortcuts/89f524dec58a4701af1e1d381a0d51fd)** | Refreshes the local metric/rule data used by iOS protection and OpenHabits reminders/task checks in Calendar Alarms. |
 
